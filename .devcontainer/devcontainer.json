@@ -1,0 +1,32 @@
+{
+  "name": "TableOS - Restaurant Agency",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "forwardPorts": [4000, 5173, 3000, 3100, 3101, 3102, 3103, 3104, 3105],
+  "portsAttributes": {
+    "4000": {
+      "label": "TableOS Gateway Proxy (Public HTTP)",
+      "onAutoForward": "openBrowser"
+    },
+    "5173": {
+      "label": "Vite Frontend Server (Internal)",
+      "onAutoForward": "ignore"
+    },
+    "3000": {
+      "label": "Agency Core REST API (Internal)",
+      "onAutoForward": "ignore"
+    }
+  },
+  "postCreateCommand": "npm install -g pnpm && pnpm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "qwtel.sqlite-viewer"
+      ]
+    }
+  }
+}
