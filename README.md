@@ -46,7 +46,22 @@ The Restaurant Agency Management System is a comprehensive platform that enables
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
+### ☁️ Run in GitHub Codespaces (Cloud)
+
+You can launch and run this entire multi-service application directly in your browser:
+1. Open the repository on GitHub and click the green **Code** button.
+2. Select the **Codespaces** tab and click **Create codespace on main**.
+3. Once the environment loads and dependencies finish installing, run the server inside the terminal:
+   ```bash
+   pnpm dev
+   ```
+4. Codespaces will automatically forward port **`4000`** (Gateway Proxy) and prompt you to open the application.
+
+---
+
+### 💻 Local Setup
+
+#### 1. Install Dependencies
 
 ```bash
 pnpm install
