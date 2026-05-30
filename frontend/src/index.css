@@ -1,0 +1,107 @@
+:root {
+  --color-bg: #080808;
+  --color-surface: #111111;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-text: #F5F0EB;
+  --color-text-muted: rgba(245, 240, 235, 0.55);
+  --color-amber: #D4920A;
+  --color-amber-light: #F0AE1A;
+  --color-amber-glow: rgba(212, 146, 10, 0.15);
+  --font-display: 'Cormorant Garamond', serif;
+  --font-body: 'Satoshi', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 font-body antialiased selection:bg-indigo-500/10 selection:text-indigo-800;
+  }
+
+  /* Custom thin scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-100/40;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+  }
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  @apply bg-white/70 backdrop-blur-md border border-slate-200/60 shadow-sm shadow-slate-100/50;
+}
+
+.glass-card {
+  @apply bg-white/95 backdrop-blur-lg border border-slate-200/80 hover:border-slate-300/80 hover:shadow-md hover:shadow-slate-200/50 transition-all duration-300;
+}
+
+/* Animations */
+@keyframes pulse-ready {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0px rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 0 12px 2px rgba(99, 102, 241, 0.15);
+  }
+}
+
+.animate-pulse-ready {
+  animation: pulse-ready 1.8s ease-in-out infinite;
+}
+
+/* Hover Lift Effect */
+.hover-lift {
+  @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/5;
+}
+
+/* Skeleton Loading Animation */
+.skeleton {
+  @apply bg-slate-200 animate-pulse rounded-md relative overflow-hidden;
+}
+
+.skeleton::after {
+  content: "";
+  @apply absolute inset-0 -translate-x-full;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Print Overrides */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 1.5rem !important;
+  }
+}

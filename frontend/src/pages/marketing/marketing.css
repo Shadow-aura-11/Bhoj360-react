@@ -1,0 +1,303 @@
+/* marketing.css - Custom Styling for the TableOS Premium Marketing Page */
+
+.tableos-landing {
+  background-color: #080808;
+  color: #F5F0EB;
+  font-family: var(--font-body), sans-serif;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Custom Fonts & Displays */
+.tableos-landing h1,
+.tableos-landing h2,
+.tableos-landing h3,
+.tableos-landing .font-serif {
+  font-family: var(--font-display), serif;
+}
+
+.tableos-landing .font-mono {
+  font-family: var(--font-mono), monospace;
+}
+
+/* Glassmorphism Styles for Marketing Page */
+.tableos-landing .glass-header {
+  background: rgba(8, 8, 8, 0.75);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tableos-landing .glass-card-dark {
+  background: rgba(17, 17, 17, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tableos-landing .glass-card-dark:hover {
+  background: rgba(17, 17, 17, 0.6);
+  border-color: rgba(212, 146, 10, 0.3);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7), 0 0 20px 0px rgba(212, 146, 10, 0.05);
+  transform: translateY(-2px);
+}
+
+/* Background Grids & Grain */
+.tableos-landing .bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tableos-landing .bg-gradient-glow {
+  background: radial-gradient(circle 800px at 50% -200px, rgba(212, 146, 10, 0.08), transparent 80%);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tableos-landing .noise-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Shimmer Hover Button Effect */
+.tableos-landing .shimmer-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.tableos-landing .shimmer-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 45%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 55%
+  );
+  transform: rotate(-45deg);
+  transition: none;
+  opacity: 0;
+}
+
+.tableos-landing .shimmer-btn:hover::after {
+  animation: shimmer-swipe 0.8s ease-out;
+  opacity: 1;
+}
+
+@keyframes shimmer-swipe {
+  0% {
+    transform: translate(-30%, -30%) rotate(-45deg);
+  }
+  100% {
+    transform: translate(30%, 30%) rotate(-45deg);
+  }
+}
+
+/* Custom Cursor Follower */
+.cursor-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-amber);
+  border-radius: 50%;
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10000;
+  transition: width 0.3s, height 0.3s, background-color 0.3s;
+}
+
+.cursor-follower {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(212, 146, 10, 0.3);
+  border-radius: 50%;
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+  transition: transform 0.08s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s, height 0.3s, background-color 0.3s, border-color 0.3s;
+}
+
+/* Hovering interactive elements expansion */
+.cursor-active .cursor-dot {
+  width: 4px;
+  height: 4px;
+  background-color: #ffffff;
+}
+
+.cursor-active .cursor-follower {
+  width: 60px;
+  height: 60px;
+  background-color: rgba(212, 146, 10, 0.1);
+  border-color: var(--color-amber);
+}
+
+/* Infinite Horizontal Scroller Marquee */
+.marquee-container {
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  width: 100%;
+}
+
+.marquee-content {
+  display: inline-flex;
+  animation: marquee-scroll 25s linear infinite;
+  min-width: 100%;
+  gap: 4rem;
+}
+
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Fade In Scroll Reveals */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Text glow Amber */
+.text-amber-glow {
+  text-shadow: 0 0 15px rgba(212, 146, 10, 0.3);
+}
+
+/* Border sweep glow animation */
+.border-glow-amber {
+  box-shadow: 0 0 30px rgba(212, 146, 10, 0.05);
+}
+
+.border-glow-amber:hover {
+  box-shadow: 0 0 30px rgba(212, 146, 10, 0.15);
+}
+
+/* Floorplan Interactive Grid Custom Styles */
+.grid-table {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.grid-table:hover {
+  fill: rgba(212, 146, 10, 0.2);
+  stroke: var(--color-amber);
+}
+
+.grid-table.reserved {
+  fill: rgba(220, 38, 38, 0.1);
+  stroke: rgba(220, 38, 38, 0.3);
+}
+
+.grid-table.occupied {
+  fill: rgba(212, 146, 10, 0.15);
+  stroke: var(--color-amber);
+}
+
+.grid-table.available {
+  fill: rgba(34, 197, 94, 0.05);
+  stroke: rgba(34, 197, 94, 0.3);
+}
+
+/* Timeline Custom Dash */
+.step-dot {
+  position: relative;
+}
+
+.step-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(212, 146, 10, 0.5);
+  animation: rotate-dashed 8s linear infinite;
+}
+
+@keyframes rotate-dashed {
+  100% { transform: rotate(360deg); }
+}
+
+/* Auto-playing browser iframe/slideshow CSS */
+.browser-chrome {
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+.browser-header {
+  background: #161616;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
+
+.dot-red { background: #FF5F56; width: 10px; height: 10px; border-radius: 50%; }
+.dot-yellow { background: #FFBD2E; width: 10px; height: 10px; border-radius: 50%; }
+.dot-green { background: #27C93F; width: 10px; height: 10px; border-radius: 50%; }
+
+.browser-address {
+  background: #080808;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  color: rgba(245, 240, 235, 0.4);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.25rem 1.5rem;
+  text-align: center;
+  flex-grow: 1;
+  margin: 0 2rem;
+  max-width: 500px;
+}
+
+/* Animations for stats counting */
+.counter-text {
+  font-feature-settings: "tnum";
+}
+
+/* Carousel/slideshow styles */
+.showcase-tab {
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.showcase-tab.active {
+  border-color: var(--color-amber);
+  color: var(--color-amber);
+}
+
+/* Custom Scrollbar override for landing only */
+.tableos-landing-lenis {
+  height: auto;
+}
+
+/* Responsive Hide Mouse Follower */
+@media (max-width: 1024px) {
+  .cursor-dot, .cursor-follower {
+    display: none !important;
+  }
+}

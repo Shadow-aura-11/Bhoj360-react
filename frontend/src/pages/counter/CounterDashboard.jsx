@@ -1,0 +1,392 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock } from 'lucide-react';
+import { createApi, agencyApi } from '../../api/client';
+import { useSocket } from '../../hooks/useSocket';
+import { useTables } from '../../hooks/useTables';
+import { useOrders } from '../../hooks/useOrders';
+import TableStatusBar from '../../components/Tables/TableStatusBar';
+import OrderCard from '../../components/Orders/OrderCard';
+import toast from 'react-hot-toast';
+
+export default function CounterDashboard() {
+  const { restaurantId } = useParams();
+  const navigate = useNavigate();
+  const api = createApi(restaurantId);
+  const { socket, isConnected } = useSocket(restaurantId);
+
+  const session = JSON.parse(sessionStorage.getItem('session') || '{}');
+  const restaurantName = session.name || 'Restaurant';
+
+  const { tables } = useTables(restaurantId, socket);
+  const { orders, refreshOrders } = useOrders(restaurantId, socket);
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [agencySettings, setAgencySettings] = useState({ logo_url: '' });
+  const [mobileTab, setMobileTab] = useState('pending'); // 'pending' | 'preparing' | 'ready'
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const { data } = await agencyApi.get('/agency/settings');
+        setAgencySettings(data || { logo_url: '' });
+      } catch (err) {
+        console.warn('Failed to load settings', err);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Beep Audio Utility
+  const playBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(660, audioCtx.currentTime); // E5 note
+      gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    } catch (e) {
+      console.warn('Web Audio API blocked or not supported');
+    }
+  };
+
+  // Clock interval
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Listen to new orders or status updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = (order) => {
+      playBeep();
+      toast(`New Order #${order.id} for Table ${order.table_number || order.table_id} Placed!`, {
+        icon: '🔔',
+        style: {
+          background: '#ef4444',
+          color: '#ffffff',
+          fontWeight: 'bold',
+        },
+        duration: 5000,
+      });
+      refreshOrders();
+    };
+
+    const handleCallWaiter = ({ tableNumber }) => {
+      playBeep();
+      toast(`Table ${tableNumber} requests assistance!`, {
+        icon: '🆘',
+        style: {
+          background: '#ef4444',
+          color: '#ffffff',
+          fontWeight: 'bold',
+        },
+        duration: 5000,
+      });
+    };
+
+    const handleOrderUpdated = ({ order }) => {
+      refreshOrders();
+      if (order && order.payment_status === 'pending_payment') {
+        playBeep();
+        toast(`Table ${order.table_number || order.table_id} requested checkout via ${order.payment_method}!`, {
+          icon: '💰',
+          style: {
+            background: '#d97706',
+            color: '#ffffff',
+            fontWeight: 'bold',
+          },
+          duration: 5000,
+        });
+      }
+    };
+
+    socket.on('order:new', handleNewOrder);
+    socket.on('waiter:called', handleCallWaiter);
+    socket.on('order:updated', handleOrderUpdated);
+    socket.on('order:itemAdded', refreshOrders);
+
+    return () => {
+      socket.off('order:new', handleNewOrder);
+      socket.off('waiter:called', handleCallWaiter);
+      socket.off('order:updated', handleOrderUpdated);
+      socket.off('order:itemAdded', refreshOrders);
+    };
+  }, [socket]);
+
+  const handleStatusChange = async (orderId, nextStatus) => {
+    try {
+      await api.put(`/orders/${orderId}`, { status: nextStatus });
+      toast.success(`Order #${orderId} moved to ${nextStatus}`);
+      refreshOrders();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update order status');
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('session');
+    navigate(`/r/${restaurantId}/login`);
+  };
+
+  // Filter orders into columns
+  const pendingOrders = orders.filter((o) => o.status === 'pending');
+  const preparingOrders = orders.filter((o) => o.status === 'preparing');
+  const readyOrders = orders.filter((o) => o.status === 'ready');
+  const checkoutRequests = orders.filter((o) => o.payment_status === 'pending_payment');
+
+  // Stats Computations
+  const completedToday = orders.filter((o) => o.status === 'paid' || o.status === 'served').length;
+  
+  // Calculate average prep time simulated/mocked for display or calculated from order timestamps
+  const getAveragePrepTime = () => {
+    const closedOrders = orders.filter((o) => o.status === 'served' || o.status === 'paid');
+    if (closedOrders.length === 0) return '12m';
+    let totalMins = 0;
+    closedOrders.forEach((o) => {
+      const created = new Date(o.created_at);
+      const updated = new Date(o.updated_at);
+      const mins = Math.floor((updated - created) / 60000);
+      totalMins += mins > 0 ? mins : 10; // clamp minimum to 10 mins
+    });
+    return `${Math.round(totalMins / closedOrders.length)}m`;
+  };
+
+  return (
+    <div className="min-h-screen bg-rose-50/20 text-slate-800 flex flex-col font-body">
+      
+      {/* Upper header */}
+      <header className="h-16 flex items-center justify-between px-6 border-b border-rose-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 flex-shrink-0 shadow-sm">
+        <div className="flex items-center gap-3">
+          {agencySettings.logo_url ? (
+            <img src={agencySettings.logo_url} alt="Agency Logo" className="w-8 h-8 rounded-lg object-contain bg-white border border-slate-200" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center font-display font-bold text-lg text-white shadow-md">
+              {restaurantName[0] || 'C'}
+            </div>
+          )}
+          <div>
+            <h1 className="text-sm font-bold font-display tracking-wide uppercase text-rose-700 flex items-center gap-1.5">
+              <ChefHat className="w-4 h-4" /> {restaurantName}
+            </h1>
+            <span className="text-[10px] text-slate-500 font-mono">
+              KITCHEN DISPLAY SYSTEM
+            </span>
+          </div>
+        </div>
+
+        {/* Dynamic status pill */}
+        <div className="flex items-center gap-4">
+          <div className="text-sm font-bold font-mono text-slate-700 bg-white px-3 py-1.5 rounded-xl border border-rose-200 shadow-sm">
+            {currentTime.toLocaleTimeString()}
+          </div>
+
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-xs">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span className="text-[10px] font-mono text-slate-500 uppercase hidden sm:inline">
+              {isConnected ? 'Linked' : 'Offline'}
+            </span>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl transition-colors font-bold text-xs shadow-xs"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Blinking Checkout Requests Banner */}
+      {checkoutRequests.length > 0 && (
+        <div className="bg-amber-500 text-slate-950 p-3 font-bold text-center text-xs tracking-wider uppercase animate-pulse flex items-center justify-center gap-3 border-b border-amber-405">
+          <span className="text-sm">🔔</span>
+          <span>{checkoutRequests.length} Pending Checkout Request(s): Table {checkoutRequests.map(r => r.table_number || r.table_id).join(', ')}</span>
+          <span className="text-[10px] bg-slate-950 text-amber-400 px-2.5 py-1 rounded-lg">Awaiting Cashier Settlement</span>
+        </div>
+      )}
+
+      {/* Seating status bar strips */}
+      <div className="bg-rose-50/10 border-b border-rose-100 px-6 py-2 flex-shrink-0 overflow-x-auto no-print">
+        <TableStatusBar tables={tables} />
+      </div>
+
+      {/* Active/Occupied tables status row */}
+      <div className="px-6 pt-4 flex-shrink-0">
+        <div className="bg-white border border-rose-100/60 rounded-3xl p-4 shadow-xs">
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Occupied & Reserved Tables</h4>
+          <div className="flex flex-wrap gap-2">
+            {tables.filter(t => t.status !== 'available').length === 0 ? (
+              <span className="text-xs text-slate-400 italic">All dining tables are available</span>
+            ) : (
+              tables.filter(t => t.status !== 'available').map(t => {
+                let badgeStyle = 'bg-rose-50 text-rose-700 border-rose-100';
+                if (t.status === 'reserved') {
+                  badgeStyle = 'bg-blue-50 text-blue-700 border-blue-105';
+                }
+                return (
+                  <div key={t.id} className={`flex items-center gap-2 px-3 py-1 rounded-xl border text-xs font-bold ${badgeStyle}`}>
+                    <span>Table {t.number}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                    <span className="text-[9px] uppercase tracking-wider">{t.status}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Tab Selector */}
+      <div className="md:hidden bg-white border-b border-rose-100 px-4 py-2 sticky top-16 z-10 shadow-xs">
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+          {[
+            { id: 'pending', label: 'Pending', count: pendingOrders.length },
+            { id: 'preparing', label: 'Preparing', count: preparingOrders.length },
+            { id: 'ready', label: 'Ready', count: readyOrders.length },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMobileTab(tab.id)}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                mobileTab === tab.id
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.5 text-[9px] rounded-full font-mono font-bold ${
+                mobileTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-650'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Kanban Board */}
+      <main className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 p-6 min-h-0 overflow-y-auto">
+        
+        {/* Column 1: Pending */}
+        <section className={`bg-white border border-slate-200/80 rounded-3xl flex flex-col h-full min-h-[400px] overflow-hidden shadow-xs ${mobileTab === 'pending' ? 'flex' : 'hidden md:flex'}`}>
+          <div className="p-4 bg-amber-50/80 border-b border-amber-100 flex items-center justify-between">
+            <h3 className="font-display font-bold text-sm text-amber-800 flex items-center gap-1.5 uppercase tracking-wide">
+              <ClipboardList className="w-4.5 h-4.5" /> NEW / PENDING
+            </h3>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 font-mono font-bold text-amber-800">
+              {pendingOrders.length}
+            </span>
+          </div>
+          <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-50/30">
+            {pendingOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs text-center py-20 italic">
+                Queue empty. All meals handled!
+              </div>
+            ) : (
+              pendingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  variant="counter"
+                  onStatusChange={handleStatusChange}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+        {/* Column 2: Preparing */}
+        <section className={`bg-white border border-slate-200/80 rounded-3xl flex flex-col h-full min-h-[400px] overflow-hidden shadow-xs ${mobileTab === 'preparing' ? 'flex' : 'hidden md:flex'}`}>
+          <div className="p-4 bg-orange-50/80 border-b border-orange-100 flex items-center justify-between">
+            <h3 className="font-display font-bold text-sm text-orange-850 flex items-center gap-1.5 uppercase tracking-wide">
+              <Flame className="w-4.5 h-4.5 animate-pulse text-orange-500" /> PREPARING
+            </h3>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-100 border border-orange-200 font-mono font-bold text-orange-800">
+              {preparingOrders.length}
+            </span>
+          </div>
+          <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-50/30">
+            {preparingOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs text-center py-20 italic">
+                Cooking queue empty. Waiting for orders...
+              </div>
+            ) : (
+              preparingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  variant="counter"
+                  onStatusChange={handleStatusChange}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+        {/* Column 3: Ready */}
+        <section className={`bg-white border border-slate-200/80 rounded-3xl flex flex-col h-full min-h-[400px] overflow-hidden shadow-xs ${mobileTab === 'ready' ? 'flex' : 'hidden md:flex'}`}>
+          <div className="p-4 bg-green-50/80 border-b border-green-100 flex items-center justify-between">
+            <h3 className="font-display font-bold text-sm text-green-800 flex items-center gap-1.5 uppercase tracking-wide">
+              <CheckSquare className="w-4.5 h-4.5" /> READY TO SERVE
+            </h3>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-green-100 border border-green-200 font-mono font-bold text-green-800">
+              {readyOrders.length}
+            </span>
+          </div>
+          <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-50/30">
+            {readyOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs text-center py-20 italic">
+                Ready queue empty. Speed up cooking!
+              </div>
+            ) : (
+              readyOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  variant="counter"
+                  onStatusChange={handleStatusChange}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+      </main>
+
+      {/* Bottom stats strip */}
+      <footer className="bg-white border-t border-rose-100 p-4 px-6 grid grid-cols-2 sm:grid-cols-4 gap-4 flex-shrink-0 text-center text-xs shadow-xs">
+        <div>
+          <span className="text-slate-400 block uppercase font-semibold">Avg Preparation Time</span>
+          <span className="text-sm font-bold font-mono text-emerald-600 mt-0.5">{getAveragePrepTime()}</span>
+        </div>
+        <div>
+          <span className="text-slate-400 block uppercase font-semibold">Meals Completed Today</span>
+          <span className="text-sm font-bold font-mono text-slate-700 mt-0.5">{completedToday}</span>
+        </div>
+        <div>
+          <span className="text-slate-400 block uppercase font-semibold">Active Cooking Pans</span>
+          <span className="text-sm font-bold font-mono text-orange-600 mt-0.5">{preparingOrders.length}</span>
+        </div>
+        <div>
+          <span className="text-slate-400 block uppercase font-semibold">KDS Queue depth</span>
+          <span className="text-sm font-bold font-mono text-rose-600 mt-0.5">{pendingOrders.length} pending</span>
+        </div>
+      </footer>
+
+    </div>
+  );
+}

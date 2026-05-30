@@ -1,0 +1,15 @@
+{
+  "name": "agency-core",
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^12.4.5",
+    "cors": "^2.8.5",
+    "date-fns": "^3.6.0",
+    "express": "^4.18.2",
+    "jszip": "^3.10.1",
+    "nodemailer": "^8.0.9",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "DEMO-MPS45489",
+    "name": "Test Client",
+    "email": "test@test.com",
+    "phone": "+91 9999999999",
+    "restaurantName": "Test Restaurant",
+    "size": "10-35 tables",
+    "notes": "Testing the submission workflow",
+    "timestamp": "2026-05-30T08:52:58.665Z"
+  }
+]
