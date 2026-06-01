@@ -18,6 +18,7 @@ export default function SelfOrder() {
   const [restaurantName, setRestaurantName] = useState('Restaurant');
   const [tableDetails, setTableDetails] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
 
   // Validate Token and Seating configuration
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function SelfOrder() {
       tableNumber: tableDetails ? tableDetails.number : table,
       tableId: tableDetails ? tableDetails.id : null,
       customerPhone: customerPhone.trim(),
+      customerName: customerName.trim(),
       qrToken: token,
     };
 
@@ -108,12 +110,19 @@ export default function SelfOrder() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
+            type="text"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Your Name (Optional)"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-amber-600 focus:outline-none rounded-2xl text-center font-bold text-base text-slate-800 placeholder:text-slate-350"
+          />
+          <input
             type="tel"
             required
             pattern="[0-9]{10}"
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            placeholder="e.g. 9876543210"
+            placeholder="Phone Number (e.g. 9876543210)"
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-amber-600 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-slate-800 placeholder:text-slate-300"
           />
           <button

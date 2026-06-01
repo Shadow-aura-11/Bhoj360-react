@@ -63,6 +63,9 @@ try {
 try {
   db.exec("ALTER TABLE menu_items ADD COLUMN image_url TEXT;");
 } catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN customer_name TEXT;");
+} catch (e) {}
 
 function readConfig() {
   return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -239,6 +242,112 @@ app.post('/auth', (req, res) => {
   db.prepare('INSERT INTO sessions (role) VALUES (?)').run(role);
 
   res.json({ role, restaurantId: RESTAURANT_ID, name: config.name });
+});
+
+// GET /settings/pins — Get current role login PINs [ADMIN]
+app.get('/settings/pins', authMiddleware('admin'), (req, res) => {
+  const config = readConfig();
+  res.json({ pins: config.pins });
+});
+
+// PUT /settings/pins — Update login credentials (PINs) for waiter, counter, cashier, admin [ADMIN]
+app.put('/settings/pins', authMiddleware('admin'), (req, res) => {
+  const { admin, waiter, counter, cashier } = req.body;
+  const config = readConfig();
+
+  if (admin !== undefined) {
+    if (admin.toString().length < 4) {
+      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+    }
+    config.pins.admin = admin.toString();
+  }
+  if (waiter !== undefined) {
+    if (waiter.toString().length < 4) {
+      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+    }
+    config.pins.waiter = waiter.toString();
+  }
+  if (counter !== undefined) {
+    if (counter.toString().length < 4) {
+      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+    }
+    config.pins.counter = counter.toString();
+  }
+  if (cashier !== undefined) {
+    if (cashier.toString().length < 4) {
+      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+    }
+    config.pins.cashier = cashier.toString();
+  }
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+
+  // Proactively update registry.json in agency-core
+  try {
+    const agencyRegistryPath = path.join(__dirname, '..', '..', 'agency-core', 'registry.json');
+    if (fs.existsSync(agencyRegistryPath)) {
+      const reg = JSON.parse(fs.readFileSync(agencyRegistryPath, 'utf8'));
+      const rIndex = reg.restaurants.findIndex(r => r.id === RESTAURANT_ID);
+      if (rIndex !== -1) {
+        reg.restaurants[rIndex].pins = config.pins;
+        fs.writeFileSync(agencyRegistryPath, JSON.stringify(reg, null, 2), 'utf8');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to sync settings with agency registry:', e.message);
+  }
+
+  res.json({ message: 'Login credentials updated successfully', pins: config.pins });
+});
+
+// GET /customers — Retrieve customer records and total statistics [ADMIN]
+app.get('/customers', authMiddleware('admin'), (req, res) => {
+  try {
+    const customers = db.prepare(`
+      SELECT 
+        phone,
+        MAX(name) AS name,
+        MAX(email) AS email,
+        SUM(order_count) AS order_count,
+        SUM(total_spend) AS total_spend,
+        SUM(resv_count) AS reservation_count,
+        MAX(last_visit) AS last_visit
+      FROM (
+        SELECT 
+          customer_phone AS phone,
+          customer_name AS name,
+          NULL AS email,
+          COUNT(id) AS order_count,
+          SUM(total) AS total_spend,
+          0 AS resv_count,
+          MAX(created_at) AS last_visit
+        FROM orders
+        WHERE customer_phone IS NOT NULL AND customer_phone != ''
+        GROUP BY customer_phone
+        
+        UNION ALL
+        
+        SELECT 
+          customer_phone AS phone,
+          customer_name AS name,
+          customer_email AS email,
+          0 AS order_count,
+          0 AS total_spend,
+          COUNT(id) AS resv_count,
+          MAX(reservation_date || ' ' || reservation_time) AS last_visit
+        FROM reservations
+        WHERE customer_phone IS NOT NULL AND customer_phone != ''
+        GROUP BY customer_phone
+      )
+      GROUP BY phone
+      ORDER BY last_visit DESC
+    `).all();
+
+    res.json(customers);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve customer records' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -708,7 +817,7 @@ app.post('/orders/self', (req, res) => {
     return res.status(401).json({ error: 'Invalid QR token' });
   }
 
-  const { items, notes, customer_phone } = req.body;
+  const { items, notes, customer_phone, customer_name } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Items array is required' });
   }
@@ -725,9 +834,9 @@ app.post('/orders/self', (req, res) => {
       // Create new order
       const result = db
         .prepare(
-          "INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, total) VALUES (?, ?, 'dine-in', 'pending', ?, ?, 0)"
+          "INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, customer_name, total) VALUES (?, ?, 'dine-in', 'pending', ?, ?, ?, 0)"
         )
-        .run(tableRow.id, table, notes || null, customer_phone || null);
+        .run(tableRow.id, table, notes || null, customer_phone || null, customer_name || null);
       order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid);
     } else {
       // Reset order status back to 'preparing' if it was already served/ready so it pops back into KDS
@@ -737,6 +846,10 @@ app.post('/orders/self', (req, res) => {
       // Update customer phone number if it wasn't recorded yet
       if (customer_phone && !order.customer_phone) {
         db.prepare("UPDATE orders SET customer_phone = ? WHERE id = ?").run(customer_phone, order.id);
+      }
+      // Update customer name if it wasn't recorded yet
+      if (customer_name && !order.customer_name) {
+        db.prepare("UPDATE orders SET customer_name = ? WHERE id = ?").run(customer_name, order.id);
       }
     }
 
@@ -779,7 +892,7 @@ app.get('/orders/:id', (req, res) => {
 
 // POST /orders — Create order [STAFF]
 app.post('/orders', authMiddleware('staff'), (req, res) => {
-  const { table_id, table_number, type = 'dine-in', items, notes, customer_phone } = req.body;
+  const { table_id, table_number, type = 'dine-in', items, notes, customer_phone, customer_name } = req.body;
 
   if (!table_id) {
     return res.status(400).json({ error: 'table_id is required' });
@@ -794,9 +907,9 @@ app.post('/orders', authMiddleware('staff'), (req, res) => {
     // Create order
     const result = db
       .prepare(
-        'INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, total) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, customer_name, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(table_id, tblNumber, type, 'pending', notes || null, customer_phone || null, 0);
+      .run(table_id, tblNumber, type, 'pending', notes || null, customer_phone || null, customer_name || null, 0);
 
     const orderId = result.lastInsertRowid;
 

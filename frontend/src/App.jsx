@@ -10,6 +10,7 @@ import TablesManager from './pages/admin/TablesManager';
 import ReservationsManager from './pages/admin/ReservationsManager';
 import MenuManager from './pages/admin/MenuManager';
 import Analytics from './pages/admin/Analytics';
+import StaffSettings from './pages/admin/StaffSettings';
 import QRPrintPage from './components/QR/QRPrintPage';
 import WaiterDashboard from './pages/waiter/WaiterDashboard';
 import CounterDashboard from './pages/counter/CounterDashboard';
@@ -129,6 +130,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['admin']}>
             <QRPrintPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/r/:restaurantId/admin/settings"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <StaffSettings />
           </ProtectedRoute>
         }
       />

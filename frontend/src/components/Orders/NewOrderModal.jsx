@@ -19,6 +19,7 @@ export default function NewOrderModal({
   const [cart, setCart] = useState([]);
   const [notes, setNotes] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [loading, setLoading] = useState(true);
   
   // Mobile UI Tabs: 'menu' | 'cart'
@@ -47,6 +48,7 @@ export default function NewOrderModal({
       setCart([]);
       setNotes('');
       setCustomerPhone(initialCustomerPhone);
+      setCustomerName('');
       setMobileTab('menu');
     }
   }, [restaurantId, isOpen, initialCustomerPhone]);
@@ -123,6 +125,7 @@ export default function NewOrderModal({
       items: cart,
       notes,
       customer_phone: customerPhone.trim(),
+      customer_name: customerName.trim(),
     });
     onClose();
   };
@@ -363,21 +366,35 @@ export default function NewOrderModal({
               )}
             </div>
 
-            {/* Customer Phone (only for new orders) */}
+            {/* Customer Details (only for new orders) */}
             {!existingOrderId && (
-              <div className="mt-4 flex-shrink-0">
-                <label className="block text-[10px] font-semibold text-slate-450 uppercase tracking-wider mb-1.5">
-                  Customer Phone Number <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  pattern="[0-9]{10}"
-                  required
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="e.g. 9876543210"
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 transition-colors font-mono placeholder:text-slate-300"
-                />
+              <div className="mt-4 flex-shrink-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 transition-colors placeholder:text-slate-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Customer Phone Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    pattern="[0-9]{10}"
+                    required
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="e.g. 9876543210"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 transition-colors font-mono placeholder:text-slate-300"
+                  />
+                </div>
               </div>
             )}
 

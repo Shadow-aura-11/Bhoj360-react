@@ -14,6 +14,7 @@ export default function Login() {
   const [description, setDescription] = useState('');
   const [tableNumber, setTableNumber] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [customerStep, setCustomerStep] = useState(1); // 1: phone, 2: table
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
@@ -181,6 +182,7 @@ export default function Login() {
         tableNumber: tableExists.number.toUpperCase(),
         tableId: tableExists.id,
         customerPhone: customerPhone.trim(),
+        customerName: customerName.trim(),
         qrToken: tableExists.qr_token,
       }));
 
@@ -199,6 +201,7 @@ export default function Login() {
     setSelectedRole(role);
     setCustomerStep(1);
     setCustomerPhone('');
+    setCustomerName('');
     setTableNumber('');
   };
 
@@ -414,16 +417,27 @@ export default function Login() {
                         <p className="text-xs text-slate-500 mt-1">Please enter your 10-digit phone number to continue</p>
                       </div>
 
-                      <div>
-                        <input
-                          type="tel"
-                          required
-                          pattern="[0-9]{10}"
-                          value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          placeholder="e.g. 9876543210"
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-850 focus:outline-none focus:border-amber-600 focus:bg-white text-center font-mono font-bold text-xl placeholder:text-slate-300"
-                        />
+                      <div className="space-y-3">
+                        <div>
+                          <input
+                            type="text"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                            placeholder="Your Name (Optional)"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-850 focus:outline-none focus:border-amber-600 focus:bg-white text-center font-bold text-base placeholder:text-slate-350"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="tel"
+                            required
+                            pattern="[0-9]{10}"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="Phone Number (e.g. 9876543210)"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-850 focus:outline-none focus:border-amber-600 focus:bg-white text-center font-mono font-bold text-xl placeholder:text-slate-300"
+                          />
+                        </div>
                       </div>
 
                       <button

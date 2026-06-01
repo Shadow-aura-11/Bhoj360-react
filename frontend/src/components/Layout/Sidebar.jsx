@@ -7,6 +7,7 @@ import {
   UtensilsCrossed, 
   BarChart3, 
   QrCode, 
+  Settings,
   LogOut, 
   X 
 } from 'lucide-react';
@@ -27,6 +28,7 @@ export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
     { label: 'Menu Manager', path: `/r/${restaurantId}/admin/menu`, icon: UtensilsCrossed },
     { label: 'Analytics', path: `/r/${restaurantId}/admin/analytics`, icon: BarChart3 },
     { label: 'Print QR Codes', path: `/r/${restaurantId}/admin/print-qr`, icon: QrCode },
+    { label: 'Settings', path: `/r/${restaurantId}/admin/settings`, icon: Settings },
   ];
 
   const sidebarContent = (

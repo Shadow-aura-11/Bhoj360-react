@@ -83,6 +83,7 @@ export default function CustomerDashboard() {
         items: cart,
         notes: notes,
         customer_phone: session.customerPhone,
+        customer_name: session.customerName || '',
       }, {
         params: { table: session.tableNumber, token: session.qrToken }
       });
