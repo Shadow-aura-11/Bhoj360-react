@@ -34,6 +34,8 @@ export default function AdminDashboard() {
   
   const [summary, setSummary] = useState({
     revenue: 0,
+    cashRevenue: 0,
+    onlineRevenue: 0,
     ordersCount: 0,
     avgOrderValue: 0,
     tableTurnover: '0%',
@@ -45,7 +47,14 @@ export default function AdminDashboard() {
     try {
       setLoadingSummary(true);
       const { data } = await api.get('/analytics/summary');
-      setSummary(data);
+      setSummary({
+        revenue: data.revenue || 0,
+        cashRevenue: data.cashRevenue || 0,
+        onlineRevenue: data.onlineRevenue || 0,
+        ordersCount: data.orderCount || 0,
+        avgOrderValue: data.avgOrderValue || 0,
+        tableTurnover: `${Math.round((data.tableTurnover || 0) * 100)}%`,
+      });
       
       // Load revenue analytics by hour for today
       const revRes = await api.get('/analytics/revenue', { params: { period: 'week' } });
@@ -156,6 +165,9 @@ export default function AdminDashboard() {
             <div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Today's Revenue</span>
               <p className="text-xl font-bold font-mono text-emerald-600 mt-0.5">₹{summary.revenue}</p>
+              <span className="text-[9px] font-medium text-slate-500 font-mono block mt-0.5">
+                Cash: ₹{summary.cashRevenue} | UPI: ₹{summary.onlineRevenue}
+              </span>
             </div>
           </div>
 

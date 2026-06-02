@@ -1,30 +1,58 @@
 import React from 'react';
+import { useLanguage } from '../../../hooks/useLanguage';
 
 export default function HowItWorks() {
-  const steps = [
+  const { isHindi, t } = useLanguage();
+
+  const steps = isHindi ? [
     {
       step: "01",
-      title: "Initialize Outlet Instance",
-      desc: "Deploy an isolated microservice container in the gateway with one click. Configure custom restaurant sub-brands, currency systems, and seating capacities.",
-      badge: "PROVISIONING"
+      title: "अतिथि क्यूआर स्कैन और ऑर्डर करते हैं",
+      desc: "मेहमान अपने फोन से सीधे डिजिटल मेनू ब्राउज़ करने और ऑर्डर देने के लिए टेबल क्यूआर कोड स्कैन करते हैं।",
+      badge: "ऑर्डरिंग"
     },
     {
       step: "02",
-      title: "Map Seating Blueprints",
-      desc: "Design your interactive dining room floorplan. Plot tables, define server dispatch zones, and automatically print static or dynamic QR checkout codes.",
-      badge: "CONFIGURATION"
+      title: "वेटर ऑर्डर की पुष्टि करते हैं",
+      desc: "वेटर अपने डैशबोर्ड पर तुरंत अलर्ट प्राप्त करते हैं, वस्तुओं की पुष्टि करते हैं, और रसोई में टिकट (KOT) प्रिंट करते हैं।",
+      badge: "रूटिंग"
     },
     {
       step: "03",
-      title: "Synchronize Team Terminals",
-      desc: "Upload your menus and register staff codes. TableOS immediately provisions tailored logins for waiters, chefs, cashiers, and managers.",
-      badge: "ONBOARDING"
+      title: "रसोई भोजन तैयार करती है",
+      desc: "रसोई कर्मचारी अपनी केडीएस स्क्रीन पर लाइव सक्रिय टिकट देखते हैं, ताजा व्यंजन तैयार करते हैं और उन्हें तैयार चिह्नित करते हैं।",
+      badge: "तैयारी"
     },
     {
       step: "04",
-      title: "Activate Orchestration",
-      desc: "Open your doors. Watch live orders route, table calls alert staff, kitchen tickets auto-update, and group revenue logs audit in real time.",
-      badge: "LIVE OPERATIONS"
+      title: "त्वरित बिलिंग और समीक्षा",
+      desc: "कैशियर स्प्लिट्स को संसाधित करते हैं, ग्राहक भुगतान करने के लिए यूपीआई क्यूआर कोड स्कैन करते हैं, और गूगल समीक्षा स्वचालित रूप से चालू हो जाती है।",
+      badge: "निपटान"
+    }
+  ] : [
+    {
+      step: "01",
+      title: "Guest Scans QR & Orders",
+      desc: "Guests scan the table QR code to browse the digital menu and place orders directly from their phones.",
+      badge: "ORDERING"
+    },
+    {
+      step: "02",
+      title: "Waiter Confirms Order",
+      desc: "Waiters receive instant alerts on their dashboard, confirm items, and print kitchen order tickets (KOT).",
+      badge: "ROUTING"
+    },
+    {
+      step: "03",
+      title: "Kitchen Prepares Food",
+      desc: "The kitchen staff views live active tickets on their KDS screen, preparing dishes fresh and marking them ready.",
+      badge: "PREPARATION"
+    },
+    {
+      step: "04",
+      title: "Instant Billing & Review",
+      desc: "Cashiers process splits, customers scan UPI QR codes to pay, and leaving Google reviews is triggered automatically.",
+      badge: "SETTLEMENT"
     }
   ];
 
@@ -35,13 +63,13 @@ export default function HowItWorks() {
         {/* Section Heading */}
         <div className="max-w-3xl text-left mb-24 space-y-4">
           <span className="text-[11px] font-mono tracking-[0.25em] text-[var(--color-amber)] uppercase">
-            Execution Lifecycle
+            {t('execution_lifecycle')}
           </span>
           <h2 className="text-4xl md:text-5xl font-serif text-[#F5F0EB]">
-            From zero to live service orchestration in hours.
+            {t('workflow_subtitle')}
           </h2>
           <p className="text-[rgba(245,240,235,0.65)] font-light text-lg">
-            A comprehensive, automated setup flow built for sophisticated hospitality groups.
+            {t('workflow_desc')}
           </p>
         </div>
 

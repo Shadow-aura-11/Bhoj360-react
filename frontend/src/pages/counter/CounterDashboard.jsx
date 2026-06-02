@@ -24,6 +24,8 @@ export default function CounterDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [agencySettings, setAgencySettings] = useState({ logo_url: '' });
   const [mobileTab, setMobileTab] = useState('pending'); // 'pending' | 'preparing' | 'ready'
+  const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
+  const [printOrder, setPrintOrder] = useState(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -34,8 +36,33 @@ export default function CounterDashboard() {
         console.warn('Failed to load settings', err);
       }
     };
+    const fetchPrinterSettings = async () => {
+      try {
+        const { data } = await api.get('/settings/printer');
+        if (data && data.printer) {
+          setPrinterSettings({
+            enabled: !!data.printer.enabled,
+            size: data.printer.size || '80mm',
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load printer settings', err);
+      }
+    };
     loadSettings();
+    fetchPrinterSettings();
   }, []);
+
+  // Trigger print when printOrder is set
+  useEffect(() => {
+    if (printOrder) {
+      const timer = setTimeout(() => {
+        window.print();
+        setPrintOrder(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [printOrder]);
 
   // Beep Audio Utility
   const playBeep = () => {
@@ -80,6 +107,9 @@ export default function CounterDashboard() {
         duration: 5000,
       });
       refreshOrders();
+      if (printerSettings.enabled) {
+        setPrintOrder(order);
+      }
     };
 
     const handleCallWaiter = ({ tableNumber }) => {
@@ -111,18 +141,25 @@ export default function CounterDashboard() {
       }
     };
 
+    const handleItemAdded = (order) => {
+      refreshOrders();
+      if (printerSettings.enabled && order) {
+        setPrintOrder(order);
+      }
+    };
+
     socket.on('order:new', handleNewOrder);
     socket.on('waiter:called', handleCallWaiter);
     socket.on('order:updated', handleOrderUpdated);
-    socket.on('order:itemAdded', refreshOrders);
+    socket.on('order:itemAdded', handleItemAdded);
 
     return () => {
       socket.off('order:new', handleNewOrder);
       socket.off('waiter:called', handleCallWaiter);
       socket.off('order:updated', handleOrderUpdated);
-      socket.off('order:itemAdded', refreshOrders);
+      socket.off('order:itemAdded', handleItemAdded);
     };
-  }, [socket]);
+  }, [socket, printerSettings.enabled]);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     try {
@@ -303,6 +340,7 @@ export default function CounterDashboard() {
                   order={order}
                   variant="counter"
                   onStatusChange={handleStatusChange}
+                  onPrint={(o) => setPrintOrder(o)}
                 />
               ))
             )}
@@ -315,7 +353,7 @@ export default function CounterDashboard() {
             <h3 className="font-display font-bold text-sm text-orange-850 flex items-center gap-1.5 uppercase tracking-wide">
               <Flame className="w-4.5 h-4.5 animate-pulse text-orange-500" /> PREPARING
             </h3>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-100 border border-orange-200 font-mono font-bold text-orange-800">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-100 border border-orange-200 font-mono font-bold text-amber-800">
               {preparingOrders.length}
             </span>
           </div>
@@ -331,6 +369,7 @@ export default function CounterDashboard() {
                   order={order}
                   variant="counter"
                   onStatusChange={handleStatusChange}
+                  onPrint={(o) => setPrintOrder(o)}
                 />
               ))
             )}
@@ -338,7 +377,7 @@ export default function CounterDashboard() {
         </section>
 
         {/* Column 3: Ready */}
-        <section className={`bg-white border border-slate-200/80 rounded-3xl flex flex-col h-full min-h-[400px] overflow-hidden shadow-xs ${mobileTab === 'ready' ? 'flex' : 'hidden md:flex'}`}>
+        <section className={`bg-white border border-slate-205 rounded-3xl flex flex-col h-full min-h-[400px] overflow-hidden shadow-xs ${mobileTab === 'ready' ? 'flex' : 'hidden md:flex'}`}>
           <div className="p-4 bg-green-50/80 border-b border-green-100 flex items-center justify-between">
             <h3 className="font-display font-bold text-sm text-green-800 flex items-center gap-1.5 uppercase tracking-wide">
               <CheckSquare className="w-4.5 h-4.5" /> READY TO SERVE
@@ -359,6 +398,7 @@ export default function CounterDashboard() {
                   order={order}
                   variant="counter"
                   onStatusChange={handleStatusChange}
+                  onPrint={(o) => setPrintOrder(o)}
                 />
               ))
             )}
@@ -386,6 +426,97 @@ export default function CounterDashboard() {
           <span className="text-sm font-bold font-mono text-rose-600 mt-0.5">{pendingOrders.length} pending</span>
         </div>
       </footer>
+
+      {/* Printer Scoped CSS and Print Ticket Layout */}
+      <style>{`
+        @media print {
+          /* Hide everything except the print-kot-section */
+          body * {
+            visibility: hidden;
+          }
+          #print-kot-section, #print-kot-section * {
+            visibility: visible;
+          }
+          #print-kot-section {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'};
+            margin: 0;
+            padding: 5px;
+            background: white;
+            color: black;
+            font-family: monospace;
+          }
+          @page {
+            size: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} auto;
+            margin: 0;
+          }
+        }
+      `}</style>
+
+      {printOrder && (
+        <div id="print-kot-section" className="hidden print:block text-black bg-white p-2">
+          <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+            <h2 className="font-bold text-sm uppercase">{restaurantName}</h2>
+            <p className="text-[10px]">KITCHEN ORDER TICKET (KOT)</p>
+            <p className="text-[10px] font-mono mt-0.5">
+              Order ID: #{printOrder.id}
+            </p>
+          </div>
+
+          <div className="text-[11px] space-y-1 mb-2 font-mono">
+            <div className="flex justify-between">
+              <span>TABLE: {printOrder.table_number || printOrder.table_id}</span>
+              <span>TYPE: {printOrder.type?.toUpperCase()}</span>
+            </div>
+            {printOrder.waiter_name && (
+              <div>WAITER: {printOrder.waiter_name.toUpperCase()}</div>
+            )}
+            {printOrder.customer_name && (
+              <div>GUEST: {printOrder.customer_name}</div>
+            )}
+            <div className="text-[9px] text-slate-500">
+              TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <table className="w-full text-xs font-mono border-t border-b border-dashed border-black py-1 mb-2">
+            <thead>
+              <tr className="border-b border-dashed border-black">
+                <th className="text-left py-0.5">Item</th>
+                <th className="text-right py-0.5">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printOrder.items && printOrder.items.map((item) => (
+                <tr key={item.id} className="align-top">
+                  <td className="py-0.5 text-[11px]">
+                    {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
+                    {item.item_name}
+                    {item.notes && (
+                      <div className="text-[9px] italic pl-2">
+                        * Note: {item.notes}
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {printOrder.notes && (
+            <div className="text-[10px] font-mono border-b border-dashed border-black pb-1 mb-2 italic">
+              <span className="font-bold">Instructions:</span> {printOrder.notes}
+            </div>
+          )}
+
+          <div className="text-center text-[9px] font-mono pt-1">
+            <p>--- End of Ticket ---</p>
+          </div>
+        </div>
+      )}
 
     </div>
   );

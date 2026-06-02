@@ -6,14 +6,14 @@ export default function FAQ() {
   const faqs = [
     {
       q: "Can we easily import existing food menus and table floorplans?",
-      a: "Yes. TableOS includes automated CSV/JSON schema import tools to populate categorised food menus instantly. Our visual floorplan layout designer lets managers map table shapes, dimensions, and waiter zones graphically in minutes."
+      a: "Yes. Bhoj360 includes automated CSV/JSON schema import tools to populate categorised food menus instantly. Our visual floorplan layout designer lets managers map table shapes, dimensions, and waiter zones graphically in minutes."
     },
     {
       q: "How does the multi-outlet server isolation protect my business?",
-      a: "Unlike traditional monolithic SaaS architectures where a global database failure compromises all clients, TableOS implements isolated node architecture. Each restaurant outlet is provisioned with its own separate database container and microservice execution loop. A server error in one restaurant cannot impact the uptime of others."
+      a: "Unlike traditional monolithic SaaS architectures where a global database failure compromises all clients, Bhoj360 implements isolated node architecture. Each restaurant outlet is provisioned with its own separate database container and microservice execution loop. A server error in one restaurant cannot impact the uptime of others."
     },
     {
-      q: "Does TableOS require dedicated hardware installations?",
+      q: "Does Bhoj360 require dedicated hardware installations?",
       a: "No. The entire system is built on responsive web standards. Your front-of-house staff can use standard iOS or Android tablets, kitchen chefs can view tickets on wall-mounted web browsers, cashiers can use desktop screens, and patrons order directly from their personal mobile browsers."
     },
     {

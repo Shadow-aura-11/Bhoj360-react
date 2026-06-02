@@ -77,7 +77,7 @@ export default function Features() {
             Engineered for culinary high-performance groups.
           </h2>
           <p className="text-[rgba(245,240,235,0.6)] font-light text-lg">
-            Say goodbye to scattered tablet systems and separate booking softwares. TableOS coordinates the entire service cycle in a single, robust platform.
+            Say goodbye to scattered tablet systems and separate booking softwares. Bhoj360 coordinates the entire service cycle in a single, robust platform.
           </p>
         </div>
 

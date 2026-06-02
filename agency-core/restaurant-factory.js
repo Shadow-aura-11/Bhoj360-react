@@ -76,6 +76,9 @@ async function createRestaurant(options = {}) {
   const description = options.description || '';
   const logout_redirect_url = options.logout_redirect_url || '';
   const login_theme_color = options.login_theme_color || '#fafaf9';
+  const location = options.location || '';
+  const contact_email = options.contact_email || '';
+  const contact_phone = options.contact_phone || '';
 
   const subscription = {
     planName: 'Bronze Plan',
@@ -97,10 +100,13 @@ async function createRestaurant(options = {}) {
     description,
     logout_redirect_url,
     login_theme_color,
+    location,
+    contact_email,
+    contact_phone,
     subscription,
     paymentHistory,
     pins: {
-      admin: options.pins?.admin || '1111',
+      admin: options.pins?.admin || 'admin123',
       waiter: options.pins?.waiter || '2222',
       counter: options.pins?.counter || '3333',
       cashier: options.pins?.cashier || '4444',
@@ -144,6 +150,25 @@ async function createRestaurant(options = {}) {
       available INTEGER DEFAULT 1,
       image_placeholder TEXT,
       image_url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS menu_item_addons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      price REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS coupons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      discount_type TEXT NOT NULL, -- 'percentage' or 'flat'
+      value REAL NOT NULL,
+      min_order_amount REAL DEFAULT 0,
+      active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -156,8 +181,16 @@ async function createRestaurant(options = {}) {
       notes TEXT,
       total REAL DEFAULT 0,
       customer_phone TEXT,
+      customer_name TEXT,
+      waiter_name TEXT,
       payment_method TEXT,
       payment_status TEXT DEFAULT 'unpaid',
+      cash_amount REAL DEFAULT 0,
+      online_amount REAL DEFAULT 0,
+      discount_amount REAL DEFAULT 0,
+      coupon_code TEXT,
+      whatsapp_sent INTEGER DEFAULT 0,
+      settled_by TEXT DEFAULT 'System',
       settled_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -172,6 +205,8 @@ async function createRestaurant(options = {}) {
       price REAL NOT NULL,
       notes TEXT,
       status TEXT DEFAULT 'pending',
+      is_addon INTEGER DEFAULT 0,
+      addons_json TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -188,6 +223,15 @@ async function createRestaurant(options = {}) {
       duration_minutes INTEGER DEFAULT 90,
       status TEXT DEFAULT 'confirmed',
       notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS staff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      pin TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -299,6 +343,9 @@ async function createRestaurant(options = {}) {
     description,
     logout_redirect_url,
     login_theme_color,
+    location,
+    contact_email,
+    contact_phone,
     subscription,
     paymentHistory
   });

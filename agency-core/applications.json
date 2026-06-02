@@ -1,0 +1,12 @@
+[
+  {
+    "id": "APP-52183202",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "1234567890",
+    "role": "Sales Executive",
+    "coverLetter": "Hello from test",
+    "resumeLink": "https://example.com/resume",
+    "createdAt": "2026-06-02T00:31:37.151Z"
+  }
+]

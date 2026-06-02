@@ -1,12 +1,13 @@
 import React from 'react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import { Play, Check, ChevronRight, CheckSquare, DollarSign, Clock } from 'lucide-react';
+import { Play, Check, ChevronRight, CheckSquare, DollarSign, Clock, Printer } from 'lucide-react';
 import StatusBadge from '../shared/StatusBadge';
 
 export default function OrderCard({
   order,
   onStatusChange,
   onViewDetails,
+  onPrint,
   compact = false,
   variant = 'waiter',
 }) {
@@ -84,6 +85,11 @@ export default function OrderCard({
           <span className="text-[10px] text-slate-400 font-mono tracking-wider mt-0.5 block">
             ORDER ID: #{order.id}
           </span>
+          {order.customer_name && (
+            <span className="text-xs font-semibold text-slate-700 mt-1 block">
+              Guest: {order.customer_name}
+            </span>
+          )}
           {order.customer_phone && (
             <a
               href={`tel:${order.customer_phone}`}
@@ -92,6 +98,11 @@ export default function OrderCard({
             >
               <span>📞 {order.customer_phone}</span>
             </a>
+          )}
+          {order.waiter_name && (
+            <span className="text-[10px] text-indigo-650 font-bold bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1.5 inline-block">
+              Waiter: {order.waiter_name}
+            </span>
           )}
         </div>
 
@@ -121,7 +132,10 @@ export default function OrderCard({
               <div className="min-w-0">
                 <div className="flex items-center gap-2 font-medium text-slate-700">
                   <span className="text-indigo-650 font-mono font-bold">x{item.quantity}</span>
-                  <span className="truncate">{item.item_name}</span>
+                  <span className="truncate">
+                    {item.is_addon ? <span className="text-rose-600 font-bold mr-1">(Add-on)</span> : ''}
+                    {item.item_name}
+                  </span>
                 </div>
                 {item.notes && (
                   <p className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md mt-1 border border-amber-100 italic">
@@ -153,6 +167,16 @@ export default function OrderCard({
         </div>
 
         <div className="flex items-center gap-2">
+          {variant === 'counter' && order.items && order.items.length > 0 && (
+            <button
+              onClick={() => onPrint && onPrint(order)}
+              className="p-2 text-slate-600 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-150 rounded-xl transition-all"
+              title="Print KOT"
+            >
+              <Printer className="w-4.5 h-4.5" />
+            </button>
+          )}
+
           {onViewDetails && (
             <button
               onClick={() => onViewDetails(order)}

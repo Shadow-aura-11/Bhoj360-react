@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useLanguage } from '../../../hooks/useLanguage';
 
 export default function Hero({ onWatchDemo }) {
+  const { isHindi, t } = useLanguage();
+
   // Simulator state
   const [tables, setTables] = useState([
     { id: 1, type: 'circle', x: 80, y: 70, r: 24, status: 'occupied', guests: 3, label: 'T-1' },
@@ -12,16 +15,22 @@ export default function Hero({ onWatchDemo }) {
     { id: 6, type: 'rect', x: 300, y: 170, w: 60, h: 40, status: 'occupied', guests: 5, label: 'T-6' },
   ]);
 
-  const [logs, setLogs] = useState([
-    { id: 1, time: '14:42', text: 'Table 4 ordered Black Truffle Tagliatelle' },
-    { id: 2, time: '14:44', text: 'Table 1 check settled ($342.50)' },
-    { id: 3, time: '14:45', text: 'Table 3 reservation seated (Mr. Sterling)' }
-  ]);
+  const [logs, setLogs] = useState(
+    isHindi ? [
+      { id: 1, time: '14:42', text: 'टेबल 4 ने ब्लैक ट्रफल टैगलीटेल ऑर्डर किया' },
+      { id: 2, time: '14:44', text: 'टेबल 1 का बिल भुगतान किया गया (₹25,999)' },
+      { id: 3, time: '14:45', text: 'टेबल 3 रिजर्वेशन बैठाया गया (श्री गुप्ता)' }
+    ] : [
+      { id: 1, time: '14:42', text: 'Table 4 ordered Black Truffle Tagliatelle' },
+      { id: 2, time: '14:44', text: 'Table 1 check settled ($342.50)' },
+      { id: 3, time: '14:45', text: 'Table 3 reservation seated (Mr. Sterling)' }
+    ]
+  );
 
   const [simStats, setSimStats] = useState({
     occupancy: '66%',
-    revenueToday: '$14,820',
-    activeServers: '8 On Shift'
+    revenueToday: isHindi ? '₹1,24,820' : '$14,820',
+    activeServers: isHindi ? '8 शिफ्ट पर' : '8 On Shift'
   });
 
   // Simple simulator loop
@@ -38,25 +47,33 @@ export default function Hero({ onWatchDemo }) {
       if (targetTable.status === 'available') {
         nextStatus = 'occupied';
         nextGuests = Math.floor(Math.random() * 4) + 1;
-        logMsg = `Table ${targetTable.id} is now seated (${nextGuests} guests)`;
+        logMsg = isHindi 
+          ? `टेबल ${targetTable.id} पर ग्राहक बैठे (${nextGuests} अतिथि)`
+          : `Table ${targetTable.id} is now seated (${nextGuests} guests)`;
       } else if (targetTable.status === 'occupied') {
         // either reserve it or free it
         if (Math.random() > 0.5) {
           nextStatus = 'reserved';
           nextGuests = 2;
-          logMsg = `Table ${targetTable.id} reserved for 18:30 seating`;
+          logMsg = isHindi
+            ? `टेबल ${targetTable.id} को 18:30 सीटिंग के लिए आरक्षित किया गया`
+            : `Table ${targetTable.id} reserved for 18:30 seating`;
         } else {
           nextStatus = 'available';
           nextGuests = 0;
-          const bills = [124, 210, 85, 345, 190];
+          const bills = isHindi ? [9999, 15999, 6999, 25999, 12999] : [124, 210, 85, 345, 190];
           const billAmt = bills[Math.floor(Math.random() * bills.length)];
-          logMsg = `Table ${targetTable.id} cleared. Bill settled: $${billAmt}.00`;
+          logMsg = isHindi
+            ? `टेबल ${targetTable.id} खाली। बिल भुगतान: ₹${billAmt.toLocaleString('en-IN')}`
+            : `Table ${targetTable.id} cleared. Bill settled: $${billAmt}.00`;
         }
       } else {
         // reserved to occupied
         nextStatus = 'occupied';
         nextGuests = 2;
-        logMsg = `Reservation check-in: Table ${targetTable.id} seated`;
+        logMsg = isHindi
+          ? `आरक्षण चेक-इन: टेबल ${targetTable.id} पर अतिथि बैठे`
+          : `Reservation check-in: Table ${targetTable.id} seated`;
       }
 
       // Update tables
@@ -72,7 +89,7 @@ export default function Hero({ onWatchDemo }) {
       // Randomly update revenue
       setSimStats(prev => {
         const numericRev = parseInt(prev.revenueToday.replace(/[^0-9]/g, ''));
-        const gain = Math.random() > 0.6 ? Math.floor(Math.random() * 150) + 50 : 0;
+        const gain = Math.random() > 0.6 ? (isHindi ? Math.floor(Math.random() * 12000) + 4000 : Math.floor(Math.random() * 150) + 50) : 0;
         const nextRev = numericRev + gain;
         
         // Calculate occupancy
@@ -82,17 +99,18 @@ export default function Hero({ onWatchDemo }) {
         return {
           ...prev,
           occupancy: newOccupancy,
-          revenueToday: `$${nextRev.toLocaleString()}`
+          revenueToday: isHindi ? `₹${nextRev.toLocaleString('en-IN')}` : `$${nextRev.toLocaleString()}`,
+          activeServers: isHindi ? '8 शिफ्ट पर' : '8 On Shift'
         };
       });
 
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [tables]);
+  }, [tables, isHindi]);
 
   return (
-    <section id="hero" className="relative min-h-screen flex items-center pt-32 pb-20 overflow-hidden">
+    <section id="hero" className="relative min-h-screen flex items-center pt-32 pb-20 overflow-hidden text-[#F5F0EB]">
       {/* Background aesthetics */}
       <div className="bg-grid-pattern"></div>
       <div className="bg-gradient-glow"></div>
@@ -110,29 +128,29 @@ export default function Hero({ onWatchDemo }) {
             {/* Elegant luxury tag */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-500/20 bg-amber-500/5 text-amber-500/90 text-xs font-mono tracking-widest uppercase">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-amber)] animate-ping"></span>
-              The Hospitality Standard
+              {t('hero_tag')}
             </div>
 
             {/* Display Headline H1 */}
             <h1 className="text-5xl md:text-7xl font-serif text-[#F5F0EB] leading-[1.08] tracking-tight">
-              The Fine-Dining <br />
+              {isHindi ? "रेस्तरां संचालन का" : "The Fine-Dining"}<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--color-amber)] to-amber-200 italic font-serif">
-                Operating System
+                {isHindi ? "अल्टीमेट इंजन" : "Operating System"}
               </span>
             </h1>
 
             {/* Paragraph Body Satoshi */}
             <p className="text-lg md:text-xl text-[rgba(245,240,235,0.7)] font-light max-w-xl leading-relaxed">
-              Coordinatively synchronize table seating, waiter dispatch routing, live reservation books, and instant service-flow analytics across your luxury multi-restaurant group. Elegant by design. Uncompromisingly precise.
+              {t('hero_desc')}
             </p>
 
             {/* Premium CTA Buttons */}
             <div className="flex flex-wrap gap-4 items-center">
               <Link
-                to="/app"
+                to="/app/login"
                 className="shimmer-btn px-8 py-4 rounded bg-[var(--color-amber)] text-black font-semibold text-base transition-all hover:bg-[var(--color-amber-light)] active:scale-95 shadow-[0_4px_20px_rgba(212,146,10,0.25)] flex items-center gap-3"
               >
-                Access System Console
+                {t('launch_console')}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
@@ -142,7 +160,7 @@ export default function Hero({ onWatchDemo }) {
                 onClick={onWatchDemo}
                 className="px-8 py-4 rounded border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-[#F5F0EB] font-medium text-base transition-all active:scale-95 flex items-center gap-3"
               >
-                <span>Watch Platform Flow</span>
+                <span>{isHindi ? "प्लेटफॉर्म फ्लो देखें" : "Watch Platform Flow"}</span>
                 <div className="w-6 h-6 rounded-full bg-[var(--color-amber)]/20 flex items-center justify-center text-[var(--color-amber)]">
                   <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
@@ -155,15 +173,21 @@ export default function Hero({ onWatchDemo }) {
             <div className="pt-8 border-t border-white/5 grid grid-cols-3 gap-6">
               <div>
                 <div className="text-3xl font-serif font-bold text-[#F5F0EB]">142+</div>
-                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">Active Outlets</div>
+                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">
+                  {isHindi ? "सक्रिय आउटलेट" : "Active Outlets"}
+                </div>
               </div>
               <div>
                 <div className="text-3xl font-serif font-bold text-[#F5F0EB]">99.99%</div>
-                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">Gateway Uptime</div>
+                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">
+                  {isHindi ? "गेटवे अपटाइम" : "Gateway Uptime"}
+                </div>
               </div>
               <div>
                 <div className="text-3xl font-serif font-bold text-[#F5F0EB]">&lt;100ms</div>
-                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">Sync Latency</div>
+                <div className="text-[11px] font-mono tracking-wider text-[var(--color-text-muted)] uppercase mt-1">
+                  {isHindi ? "सिंक विलंबता" : "Sync Latency"}
+                </div>
               </div>
             </div>
 
@@ -177,7 +201,9 @@ export default function Hero({ onWatchDemo }) {
               <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span className="text-xs font-mono uppercase tracking-widest text-[#F5F0EB]/90">Live Seating Network</span>
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#F5F0EB]/90">
+                    {isHindi ? "लाइव सीटिंग नेटवर्क" : "Live Seating Network"}
+                  </span>
                 </div>
                 <span className="text-xs font-mono text-[var(--color-amber)]">OUTLET #3101</span>
               </div>
@@ -185,15 +211,21 @@ export default function Hero({ onWatchDemo }) {
               {/* Dynamic stats row */}
               <div className="grid grid-cols-3 gap-2 mb-6 text-center">
                 <div className="bg-black/40 border border-white/5 rounded-lg py-2.5">
-                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">Occupancy</div>
+                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">
+                    {isHindi ? "भरे स्थान" : "Occupancy"}
+                  </div>
                   <div className="text-sm font-semibold font-mono text-emerald-400 mt-0.5">{simStats.occupancy}</div>
                 </div>
                 <div className="bg-black/40 border border-white/5 rounded-lg py-2.5">
-                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">Today's Rev</div>
+                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">
+                    {isHindi ? "आज का राजस्व" : "Today's Rev"}
+                  </div>
                   <div className="text-sm font-semibold font-mono text-[#F5F0EB] mt-0.5">{simStats.revenueToday}</div>
                 </div>
                 <div className="bg-black/40 border border-white/5 rounded-lg py-2.5">
-                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">Staff</div>
+                  <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase">
+                    {isHindi ? "स्टाफ" : "Staff"}
+                  </div>
                   <div className="text-sm font-semibold font-mono text-[var(--color-amber)] mt-0.5">{simStats.activeServers}</div>
                 </div>
               </div>
@@ -201,7 +233,6 @@ export default function Hero({ onWatchDemo }) {
               {/* Floor Plan Grid Drawing */}
               <div className="relative border border-white/5 bg-black/80 rounded-xl p-4 overflow-hidden mb-6 flex justify-center">
                 <svg width="380" height="260" viewBox="0 0 380 260" className="w-full h-auto">
-                  {/* Decorative Floor Grid Line Details */}
                   <defs>
                     <pattern id="floor-grid" width="20" height="20" patternUnits="userSpaceOnUse">
                       <rect width="20" height="20" fill="none" />
@@ -210,7 +241,7 @@ export default function Hero({ onWatchDemo }) {
                   </defs>
                   <rect width="100%" height="100%" fill="url(#floor-grid)" />
 
-                  {/* Room Boundary Walls (subtle luxury stroke) */}
+                  {/* Room Boundary Walls */}
                   <rect x="5" y="5" width="370" height="250" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="3 3" />
 
                   {/* Render Simulator Tables */}
@@ -235,7 +266,6 @@ export default function Hero({ onWatchDemo }) {
                               strokeWidth="1.5" 
                               className="transition-all duration-700" 
                             />
-                            {/* Inner ambient ring */}
                             <circle cx={t.x} cy={t.y} r={t.r - 5} fill="none" stroke={strokeColor} strokeWidth="0.5" opacity="0.3" />
                           </>
                         ) : (
@@ -251,12 +281,10 @@ export default function Hero({ onWatchDemo }) {
                               strokeWidth="1.5"
                               className="transition-all duration-700" 
                             />
-                            {/* Inner ambient rect */}
                             <rect x={t.x + 4} y={t.y + 4} width={t.w - 8} height={t.h - 8} rx="3" fill="none" stroke={strokeColor} strokeWidth="0.5" opacity="0.3" />
                           </>
                         )}
 
-                        {/* Guests representation (little seats around table) */}
                         {t.status === 'occupied' && (
                           <g opacity="0.8">
                             {Array.from({ length: t.guests }).map((_, i) => {
@@ -278,7 +306,6 @@ export default function Hero({ onWatchDemo }) {
                           </g>
                         )}
 
-                        {/* Table text labels */}
                         <text 
                           x={t.type === 'circle' ? t.x : t.x + t.w/2} 
                           y={t.type === 'circle' ? t.y + 4 : t.y + t.h/2 + 4} 
@@ -299,7 +326,7 @@ export default function Hero({ onWatchDemo }) {
               {/* Console log of events */}
               <div className="space-y-2">
                 <div className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider mb-2 border-b border-white/5 pb-1 text-left">
-                  System Dispatch Events
+                  {isHindi ? "सिस्टम प्रेषण घटनाक्रम" : "System Dispatch Events"}
                 </div>
                 {logs.map((log) => (
                   <div key={log.id} className="flex gap-3 text-xs text-left leading-relaxed animate-fadeIn">

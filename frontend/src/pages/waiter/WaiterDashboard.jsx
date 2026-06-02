@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X } from 'lucide-react';
+import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -18,6 +18,15 @@ export default function WaiterDashboard() {
   const api = createApi(restaurantId);
   const { socket, isConnected } = useSocket(restaurantId);
 
+  const normalizeMethod = (method) => {
+    if (!method) return 'cash';
+    const m = method.toLowerCase();
+    if (m === 'online' || m === 'upi') return 'upi';
+    if (m === 'split') return 'split';
+    if (m === 'cash') return 'cash';
+    return 'upi';
+  };
+
   const session = JSON.parse(sessionStorage.getItem('session') || '{}');
   const restaurantName = session.name || 'Restaurant';
 
@@ -34,6 +43,22 @@ export default function WaiterDashboard() {
   const [modalTable, setModalTable] = useState(null);
   const [agencySettings, setAgencySettings] = useState({ logo_url: '' });
   const [activeTab, setActiveTab] = useState('tables'); // 'tables' | 'summary' | 'detail'
+  const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
+  const [restaurantConfig, setRestaurantConfig] = useState(null);
+  const [printOrder, setPrintOrder] = useState(null);
+
+  // POS Settle states
+  const [settleModalOpen, setSettleModalOpen] = useState(false);
+  const [settleMethod, setSettleMethod] = useState('cash'); // 'cash' | 'upi' | 'split'
+  const [cashAmount, setCashAmount] = useState(0);
+  const [onlineAmount, setOnlineAmount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [upiQrBase64, setUpiQrBase64] = useState('');
+  const [loadingQr, setLoadingQr] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -44,8 +69,36 @@ export default function WaiterDashboard() {
         console.warn('Failed to load settings', err);
       }
     };
+    const fetchRestaurantConfig = async () => {
+      try {
+        const { data } = await api.get('/settings/config');
+        if (data) {
+          setRestaurantConfig(data);
+          if (data.printing?.hardware) {
+            setPrinterSettings({
+              enabled: !!data.printing.hardware.enabled,
+              size: data.printing.hardware.size || '80mm',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load restaurant config', err);
+      }
+    };
     loadSettings();
+    fetchRestaurantConfig();
   }, []);
+
+  // Trigger print when printOrder is set
+  useEffect(() => {
+    if (printOrder) {
+      const timer = setTimeout(() => {
+        window.print();
+        setPrintOrder(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [printOrder]);
 
   // Beep Audio Utility
   const playBeep = () => {
@@ -130,6 +183,9 @@ export default function WaiterDashboard() {
     (o) => o.table_id === activeTable?.id && o.status !== 'paid' && o.status !== 'cancelled'
   );
 
+  const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+  const finalPayableTotal = (orderToSettle?.total || 0) - discountAmount;
+
   // Find today's reservation within 60 min for selected table
   const nextReservation = reservations.find((r) => {
     if (r.table_id !== activeTable?.id || r.status !== 'confirmed') return false;
@@ -152,7 +208,6 @@ export default function WaiterDashboard() {
   const handleQuickStatusChange = async (status) => {
     try {
       await api.put(`/tables/${activeTable.id}`, {
-        ...activeTable,
         status,
       });
       toast.success(`Table ${activeTable.number} marked as ${status}`);
@@ -176,6 +231,189 @@ export default function WaiterDashboard() {
     }
   };
 
+  // Sync Settle modal states
+  useEffect(() => {
+    if (settleModalOpen && orderToSettle) {
+      setWhatsappPhone(orderToSettle.customer_phone || '');
+      setDiscountAmount(orderToSettle.discount_amount || 0);
+      setCouponCode(orderToSettle.coupon_code || '');
+      const finalAmt = orderToSettle.total - (orderToSettle.discount_amount || 0);
+      const normalized = normalizeMethod(orderToSettle.payment_method);
+      setSettleMethod(normalized);
+      if (normalized === 'cash') {
+        setCashAmount(finalAmt);
+        setOnlineAmount(0);
+      } else if (normalized === 'upi') {
+        setCashAmount(0);
+        setOnlineAmount(finalAmt);
+      } else if (normalized === 'split') {
+        const ca = orderToSettle.cash_amount !== undefined ? orderToSettle.cash_amount : finalAmt / 2;
+        const oa = orderToSettle.online_amount !== undefined ? orderToSettle.online_amount : finalAmt / 2;
+        setCashAmount(ca);
+        setOnlineAmount(oa);
+      }
+    }
+  }, [settleModalOpen, orderToSettle]);
+
+  // Dynamic UPI QR Code generator trigger
+  useEffect(() => {
+    if (!settleModalOpen) return;
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+    if (!orderToSettle) return;
+
+    const finalPayable = orderToSettle.total - discountAmount;
+    const qrAmt = settleMethod === 'split' ? onlineAmount : finalPayable;
+
+    if ((settleMethod === 'upi' || settleMethod === 'split') && qrAmt > 0) {
+      const fetchQr = async () => {
+        try {
+          setLoadingQr(true);
+          const { data } = await api.get(`/settings/upi-qr?amount=${qrAmt}`);
+          setUpiQrBase64(data.qr_base64);
+        } catch (err) {
+          console.error(err);
+          setUpiQrBase64('');
+        } finally {
+          setLoadingQr(false);
+        }
+      };
+      fetchQr();
+    } else {
+      setUpiQrBase64('');
+    }
+  }, [settleMethod, onlineAmount, settleModalOpen, discountAmount]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+    if (!orderToSettle) return;
+
+    try {
+      setApplyingCoupon(true);
+      const { data } = await api.post('/coupons/validate', {
+        code: couponCode.trim(),
+        amount: orderToSettle.total
+      });
+      if (data.valid) {
+        setDiscountAmount(data.discount_amount);
+        const newTotal = orderToSettle.total - data.discount_amount;
+        if (settleMethod === 'cash' || settleMethod === 'upi') {
+          setCashAmount(settleMethod === 'cash' ? newTotal : 0);
+          setOnlineAmount(settleMethod === 'upi' ? newTotal : 0);
+        } else {
+          setCashAmount(newTotal);
+          setOnlineAmount(0);
+        }
+        toast.success(`Coupon applied successfully! Discount of ₹${data.discount_amount} credited.`);
+      } else {
+        toast.error(data.message || 'Invalid coupon');
+        setDiscountAmount(0);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to validate coupon');
+      setDiscountAmount(0);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
+  const handleCashAmountChange = (val) => {
+    const cash = parseFloat(val) || 0;
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    setCashAmount(cash);
+    setOnlineAmount(Math.max(0, finalTotal - cash));
+  };
+
+  const handleOnlineAmountChange = (val) => {
+    const online = parseFloat(val) || 0;
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    setOnlineAmount(online);
+    setCashAmount(Math.max(0, finalTotal - online));
+  };
+
+  const handleSettleOrder = async () => {
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
+    if (!orderToSettle) return;
+
+    const finalTotal = orderToSettle.total - discountAmount;
+    
+    if (settleMethod === 'split') {
+      if (Math.abs(parseFloat(cashAmount) + parseFloat(onlineAmount) - finalTotal) > 0.05) {
+        toast.error(`Split amounts (Cash: ₹${cashAmount}, Online: ₹${onlineAmount}) must equal total of ₹${finalTotal}`);
+        return;
+      }
+    }
+
+    if (whatsappPhone && !/^\d{10}$/.test(whatsappPhone)) {
+      toast.error('WhatsApp phone number must be exactly 10 digits');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.post(`/orders/${orderToSettle.id}/settle`, {
+        payment_method: settleMethod,
+        cash_amount: settleMethod === 'split' ? parseFloat(cashAmount) : undefined,
+        online_amount: settleMethod === 'split' ? parseFloat(onlineAmount) : undefined,
+        discount_amount: parseFloat(discountAmount),
+        coupon_code: couponCode
+      });
+      
+      toast.success(`Order #${orderToSettle.id} settled successfully!`);
+      
+      // Auto-load invoice for printing
+      const { data: settledOrder } = await api.get(`/orders/${orderToSettle.id}`);
+      setPrintOrder(settledOrder);
+
+      // Just register customer phone with backend (but do not auto-redirect browser tab)
+      if (whatsappPhone) {
+        try {
+          await api.post(`/orders/${orderToSettle.id}/send-whatsapp`, { phone: whatsappPhone });
+        } catch (e) {
+          console.warn('Failed to register customer phone');
+        }
+      }
+
+      setSettleModalOpen(false);
+      setTableDetailsModalOpen(false);
+      setSelectedTable(null);
+      refreshOrders();
+      refreshTables();
+
+      // Trigger automatic printing after a short delay
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to settle order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendWhatsAppBill = async (orderId) => {
+    if (!whatsappPhone || !/^\d{10}$/.test(whatsappPhone)) {
+      toast.error('WhatsApp phone number must be exactly 10 digits');
+      return;
+    }
+    const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null) || (orders.find(o => o.id === orderId));
+    if (!orderToSettle) return;
+    const finalTotal = orderToSettle.total - discountAmount;
+    try {
+      await api.post(`/orders/${orderToSettle.id}/send-whatsapp`, { phone: whatsappPhone });
+      const reviewLink = orderToSettle.google_review_url || 'https://google.com';
+      const msg = `Dear Customer, your bill for Order #${orderToSettle.id} at ${restaurantName} is ₹${finalTotal}. Thank you for dining with us! Kindly leave a Google review here: ${reviewLink}`;
+      window.open(`https://wa.me/91${whatsappPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+      toast.success('WhatsApp bill link opened and sent!');
+    } catch (e) {
+      console.warn('Failed to send simulated WhatsApp');
+      toast.error('Failed to send simulated WhatsApp');
+    }
+  };
+
   const handleOrderSubmit = async (orderData) => {
     try {
       if (activeOrder) {
@@ -184,8 +422,11 @@ export default function WaiterDashboard() {
         toast.success(`Added ${orderData.items.length} items to order #${activeOrder.id}`);
       } else {
         // Create new order
-        await api.post('/orders', orderData);
-        toast.success(`Created new order for Table ${activeTable.number}`);
+        await api.post('/orders', {
+          ...orderData,
+          waiter_name: session.staffName || undefined,
+        });
+        toast.success(`Created new order for Table ${activeTable?.number || orderData.table_number}`);
         setCurrentCustomerPhone('');
       }
       refreshOrders();
@@ -206,6 +447,8 @@ export default function WaiterDashboard() {
     sessionStorage.removeItem('session');
     navigate(`/r/${restaurantId}/login`);
   };
+
+
 
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col font-body">
@@ -452,14 +695,25 @@ export default function WaiterDashboard() {
                             Mark: Served
                           </button>
                         )}
-                        {activeOrder.status === 'served' && (
+                        {activeOrder.status !== 'paid' && activeOrder.status !== 'cancelled' && (
                           <button
-                            onClick={() => handleOrderStatusAdvance('paid')}
+                            onClick={() => {
+                              setSelectedTable(activeTable);
+                              setSettleModalOpen(true);
+                            }}
                             className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-sm"
                           >
-                            Mark: Bill Settled
+                            Settle & Mark Paid
                           </button>
                         )}
+
+                        <button
+                          onClick={() => setPrintOrder(activeOrder)}
+                          className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5"
+                        >
+                          <Printer className="w-4 h-4" />
+                          <span>Print KOT Slip</span>
+                        </button>
 
                         <button
                           onClick={() => setOrderModalOpen(true)}
@@ -479,8 +733,8 @@ export default function WaiterDashboard() {
                           const userPhone = prompt("Please enter customer's 10-digit phone number first to start the order:");
                           if (!userPhone) return;
                           const phone = userPhone.trim().replace(/\D/g, '');
-                          if (phone.length < 10) {
-                            toast.error("Valid 10-digit phone number is required.");
+                          if (phone.length !== 10) {
+                            toast.error("Exactly 10-digit phone number is required.");
                             return;
                           }
                           setCurrentCustomerPhone(phone);
@@ -751,18 +1005,26 @@ export default function WaiterDashboard() {
                           Mark: Served
                         </button>
                       )}
-                      {tableActiveOrder.status === 'served' && (
+                      {tableActiveOrder.status !== 'paid' && tableActiveOrder.status !== 'cancelled' && (
                         <button
                           onClick={() => {
-                            api.put(`/orders/${tableActiveOrder.id}`, { status: 'paid' })
-                              .then(() => { toast.success('Order status updated'); refreshOrders(); refreshTables(); })
-                              .catch(err => { console.error(err); toast.error('Failed'); });
+                            setTableDetailsModalOpen(false);
+                            setSelectedTable(modalTable);
+                            setSettleModalOpen(true);
                           }}
                           className="w-full py-2 bg-blue-600 hover:bg-blue-555 text-white text-xs font-bold rounded-xl shadow-sm"
                         >
-                          Mark: Settled
+                          Settle & Mark Paid
                         </button>
                       )}
+
+                      <button
+                        onClick={() => setPrintOrder(tableActiveOrder)}
+                        className="col-span-2 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 mt-1"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span>Print KOT Slip</span>
+                      </button>
 
                       <button
                         onClick={() => {
@@ -770,7 +1032,7 @@ export default function WaiterDashboard() {
                           setSelectedTable(modalTable);
                           setOrderModalOpen(true);
                         }}
-                        className="col-span-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1 shadow-sm mt-1"
+                        className="col-span-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1 shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Items</span>
@@ -787,8 +1049,8 @@ export default function WaiterDashboard() {
                         const userPhone = prompt("Please enter customer's 10-digit phone number:");
                         if (!userPhone) return;
                         const phone = userPhone.trim().replace(/\D/g, '');
-                        if (phone.length < 10) {
-                          toast.error("Valid 10-digit phone number is required.");
+                        if (phone.length !== 10) {
+                          toast.error("Exactly 10-digit phone number is required.");
                           return;
                         }
                         setCurrentCustomerPhone(phone);
@@ -832,7 +1094,7 @@ export default function WaiterDashboard() {
                   <button
                     onClick={async () => {
                       try {
-                        await api.put(`/tables/${modalTable.id}`, { ...modalTable, status: 'available' });
+                        await api.put(`/tables/${modalTable.id}`, { status: 'available' });
                         toast.success('Table status updated');
                         setTableDetailsModalOpen(false);
                         refreshTables();
@@ -845,7 +1107,7 @@ export default function WaiterDashboard() {
                   <button
                     onClick={async () => {
                       try {
-                        await api.put(`/tables/${modalTable.id}`, { ...modalTable, status: 'occupied' });
+                        await api.put(`/tables/${modalTable.id}`, { status: 'occupied' });
                         toast.success('Table status updated');
                         setTableDetailsModalOpen(false);
                         refreshTables();
@@ -858,7 +1120,7 @@ export default function WaiterDashboard() {
                   <button
                     onClick={async () => {
                       try {
-                        await api.put(`/tables/${modalTable.id}`, { ...modalTable, status: 'reserved' });
+                        await api.put(`/tables/${modalTable.id}`, { status: 'reserved' });
                         toast.success('Table status updated');
                         setTableDetailsModalOpen(false);
                         refreshTables();
@@ -875,6 +1137,424 @@ export default function WaiterDashboard() {
           </div>
         );
       })()}
+
+      {/* POS Settle Dialog Modal */}
+      {settleModalOpen && orderToSettle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={() => setSettleModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl flex flex-col gap-4 animate-slide-up text-slate-800 no-print max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-display font-black text-lg text-blue-700">Settle Order Billing</h3>
+                <p className="text-xs text-slate-500 mt-1">Table {activeTable?.number || modalTable?.number} | Order #{orderToSettle.id}</p>
+              </div>
+              <button onClick={() => setSettleModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-xl text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Price Calculations */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold text-slate-500">
+                <span>Items Subtotal:</span>
+                <span className="font-mono">₹{orderToSettle.total}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-xs font-semibold text-emerald-600">
+                  <span>Coupon Discount:</span>
+                  <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <span className="text-xs text-slate-655 font-bold uppercase tracking-wider">Final Payable Total:</span>
+                <span className="text-2xl font-bold font-mono text-emerald-600">₹{finalPayableTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Coupons Section */}
+            <div className="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Promo Coupon Code</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="e.g. WELCOME10"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs uppercase font-bold focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={applyingCoupon}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shrink-0 flex items-center gap-1"
+                >
+                  <Gift className="w-3.5 h-3.5" />
+                  <span>{applyingCoupon ? '...' : 'Apply'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Payment Settle Method</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'cash', label: 'Cash Only' },
+                  { id: 'upi', label: 'UPI / Online' },
+                  { id: 'split', label: 'Split Payment' },
+                ].map((m) => (
+                  <button
+                     key={m.id}
+                     type="button"
+                     onClick={() => {
+                       setSettleMethod(m.id);
+                       if (m.id === 'cash') {
+                         setCashAmount(finalPayableTotal);
+                         setOnlineAmount(0);
+                       } else if (m.id === 'upi') {
+                         setCashAmount(0);
+                         setOnlineAmount(finalPayableTotal);
+                       } else {
+                         setCashAmount(finalPayableTotal / 2);
+                         setOnlineAmount(finalPayableTotal / 2);
+                       }
+                     }}
+                     className={`py-2 px-3 rounded-xl border-2 text-xs font-bold text-center transition-all ${
+                       settleMethod === m.id
+                         ? 'border-blue-600 bg-blue-50 text-blue-700 font-black'
+                         : 'border-slate-200 hover:bg-slate-50 text-slate-500'
+                     }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Split Options Details */}
+            {settleMethod === 'split' && (
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Cash Share</label>
+                  <input 
+                    type="number" 
+                    value={cashAmount}
+                    onChange={(e) => handleCashAmountChange(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-700"
+                    min="0"
+                    max={finalPayableTotal}
+                    step="0.01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Online Share</label>
+                  <input 
+                    type="number" 
+                    value={onlineAmount}
+                    onChange={(e) => handleOnlineAmountChange(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-700"
+                    min="0"
+                    max={finalPayableTotal}
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic UPI QR Code Display */}
+            {(settleMethod === 'upi' || settleMethod === 'split') && (
+              <div className="bg-slate-50 p-4 border border-slate-200 rounded-2.5xl text-center space-y-3">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Scan to Pay via UPI QR</span>
+                
+                {loadingQr ? (
+                  <div className="w-32 h-32 bg-slate-100 rounded-xl mx-auto flex items-center justify-center border border-slate-200">
+                    <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />
+                  </div>
+                ) : upiQrBase64 ? (
+                  <div className="bg-white p-2.5 border border-slate-250 border-slate-200 rounded-xl w-36 h-36 mx-auto flex items-center justify-center shadow-sm">
+                    <img src={upiQrBase64} alt="UPI Payment QR" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 bg-rose-50 rounded-xl mx-auto flex items-center justify-center border border-rose-100 text-rose-500 text-[10px] p-2 leading-relaxed">
+                    UPI Merchant ID is not configured in Billing settings.
+                  </div>
+                )}
+                
+                <span className="text-[8.5px] text-slate-400 uppercase tracking-widest font-mono font-semibold">
+                  Online Share: ₹{(settleMethod === 'split' ? onlineAmount : finalPayableTotal).toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {/* WhatsApp billing share trigger */}
+            <div className="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">WhatsApp Customer Billing Share</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  maxLength={10}
+                  placeholder="10-digit customer number"
+                  value={whatsappPhone}
+                  onChange={(e) => setWhatsappPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsAppBill(orderToSettle.id)}
+                  className="px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shrink-0 flex items-center gap-1"
+                >
+                  <Send className="w-3 h-3" />
+                  <span>Share</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Settle Action Button */}
+            <button
+              onClick={handleSettleOrder}
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl flex items-center justify-center gap-1.5 shadow-sm mt-2 hover:-translate-y-0.5 transition-transform"
+            >
+              <Check className="w-4 h-4" />
+              <span>{loading ? 'Processing...' : 'Confirm Payment & Close Bill'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Scoped printer style sheets */}
+      <style>{`
+        @media print {
+          /* Hide everything except the print-kot-section */
+          body * {
+            visibility: hidden;
+          }
+          #print-kot-section, #print-kot-section * {
+            visibility: visible;
+          }
+          #print-kot-section {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'};
+            margin: 0;
+            padding: 5px;
+            background: white;
+            color: black;
+            font-family: monospace;
+          }
+          @page {
+            size: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} auto;
+            margin: 0;
+          }
+        }
+      `}</style>
+
+      {printOrder && (
+        <div id="print-kot-section" className="hidden print:block text-black bg-white p-2">
+          {printOrder.status === 'paid' ? (
+            // CUSTOMER BILL RECEIPT
+            <div>
+              {restaurantConfig?.printing?.bill_setting?.show_logo && restaurantConfig?.logo_url && (
+                <div className="text-center mb-2">
+                  <img src={restaurantConfig.logo_url} alt="Logo" className="w-12 h-12 mx-auto object-contain" />
+                </div>
+              )}
+              <div className="text-center font-bold text-sm mb-1 uppercase">{restaurantName}</div>
+              <div className="text-center text-[10px] mb-2 font-mono">Restaurant Bill Invoice</div>
+              {restaurantConfig?.fssai_compliance && (
+                <div className="text-center text-[9px] mb-1 font-mono">FSSAI: {restaurantConfig.fssai_compliance}</div>
+              )}
+              {restaurantConfig?.printing?.bill_setting?.show_address && restaurantConfig?.location && (
+                <div className="text-center text-[9px] mb-2 font-mono">{restaurantConfig.location}</div>
+              )}
+              <div className="border-b border-black border-dashed mb-2"></div>
+              
+              <div className="flex justify-between text-[10px] font-mono mb-1">
+                <span>Settled Date: {new Date(printOrder.settled_at || printOrder.created_at).toLocaleDateString()}</span>
+                <span>Settled Time: {new Date(printOrder.settled_at || printOrder.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              <div className="flex justify-between text-[10px] font-mono mb-1">
+                <span>Order ID: #{printOrder.id}</span>
+                <span>Table: {printOrder.table_number || 'Takeaway'}</span>
+              </div>
+              {restaurantConfig?.printing?.bill_setting?.show_customer_info && printOrder.customer_phone && (
+                <div className="text-[10px] font-mono mb-2">Cust Phone: {printOrder.customer_phone}</div>
+              )}
+
+              <div className="border-b border-black border-dashed my-2"></div>
+              
+              {/* Items Header */}
+              <div className="grid grid-cols-12 font-bold text-[10px] font-mono mb-1">
+                <span className="col-span-6">Item</span>
+                <span className="col-span-2 text-right">Qty</span>
+                <span className="col-span-4 text-right">Price</span>
+              </div>
+              
+              {/* Items List */}
+              {printOrder.items?.map((item) => (
+                <div key={item.id} className="grid grid-cols-12 text-[10px] font-mono mb-1">
+                  <span className="col-span-6 truncate">
+                    {item.is_addon ? '(Add-on) ' : ''}{item.item_name}
+                  </span>
+                  <span className="col-span-2 text-right">x{item.quantity}</span>
+                  <span className="col-span-4 text-right">₹{item.price * item.quantity}</span>
+                </div>
+              ))}
+
+              <div className="border-b border-black border-dashed my-2"></div>
+
+              {/* GST / Taxes Calculations */}
+              {(() => {
+                const subtotal = printOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || printOrder.total || 0;
+                const discount = printOrder.discount_amount || 0;
+                const taxableAmount = subtotal - discount;
+                const gstEnabled = restaurantConfig?.billing?.gst_enabled;
+                const gstPercent = restaurantConfig?.billing?.gst_percentage || 0;
+                const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+                const serviceChargePercent = restaurantConfig?.billing?.service_charge_percentage || 0;
+                const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+                const grandTotal = taxableAmount + gstAmount + serviceChargeAmount;
+
+                return (
+                  <div className="text-[10px] font-mono space-y-1">
+                    {discount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Discount:</span>
+                        <span>-₹{discount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {gstEnabled && (
+                      <div className="flex justify-between">
+                        <span>GST ({gstPercent}%):</span>
+                        <span>₹{gstAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {serviceChargePercent > 0 && (
+                      <div className="flex justify-between">
+                        <span>Service Charge ({serviceChargePercent}%):</span>
+                        <span>₹{serviceChargeAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-xs pt-1 border-t border-black border-dashed">
+                      <span>Grand Total:</span>
+                      <span>₹{grandTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-between text-[10px] mt-2 font-mono">
+                <span>Settle Mode:</span>
+                <span className="uppercase">{printOrder.payment_method}</span>
+              </div>
+              {printOrder.payment_method === 'split' && (
+                <div className="text-[9px] text-right font-mono mt-0.5">
+                  Cash: ₹{printOrder.cash_amount} | Online: ₹{printOrder.online_amount}
+                </div>
+              )}
+              {printOrder.settled_by && (
+                <div className="text-[9px] text-left font-mono mt-1 text-slate-500">
+                  Cashier/Staff: {printOrder.settled_by}
+                </div>
+              )}
+
+              <div className="border-b border-black border-dashed my-2"></div>
+              
+              <div className="text-center font-bold mt-4 uppercase text-[11px]">
+                {restaurantConfig?.printing?.bill_setting?.custom_footer || 'Thank you! Visit again.'}
+              </div>
+              <div className="text-center text-[9px] text-gray-500 mt-1">Powered by Bhoj360</div>
+            </div>
+          ) : (
+            // KITCHEN ORDER TICKET (KOT)
+            <div>
+              <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                <h2 className="font-bold text-sm uppercase">{restaurantName}</h2>
+                <p className="text-[10px] font-bold">KITCHEN ORDER TICKET (KOT)</p>
+                <p className="text-[10px] font-mono mt-0.5">
+                  Order ID: #{printOrder.id}
+                </p>
+              </div>
+
+              {restaurantConfig?.printing?.kot_setting?.prep_ticket_layout === 'detailed' ? (
+                <div className="text-[11px] space-y-1.5 mb-2 font-mono border-b border-dashed border-black pb-2">
+                  <div className="flex justify-between text-xs font-extrabold bg-black text-white px-1">
+                    <span>TABLE: {printOrder.table_number || printOrder.table_id}</span>
+                    <span>{printOrder.type?.toUpperCase()}</span>
+                  </div>
+                  {printOrder.waiter_name && (
+                    <div className="font-extrabold text-[11px]">WAITER: {printOrder.waiter_name.toUpperCase()}</div>
+                  )}
+                  {printOrder.customer_name && (
+                    <div>GUEST NAME: {printOrder.customer_name}</div>
+                  )}
+                  {printOrder.notes && (
+                    <div className="bg-yellow-50 border-l-2 border-black pl-1 font-bold text-[11px] text-black">
+                      INSTRUCTIONS: {printOrder.notes}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-600">
+                    TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] space-y-1 mb-2 font-mono">
+                  <div className="flex justify-between">
+                    <span>TABLE: {printOrder.table_number || printOrder.table_id}</span>
+                    <span>TYPE: {printOrder.type?.toUpperCase()}</span>
+                  </div>
+                  {printOrder.waiter_name && (
+                    <div>WAITER: {printOrder.waiter_name.toUpperCase()}</div>
+                  )}
+                  {printOrder.customer_name && (
+                    <div>GUEST: {printOrder.customer_name}</div>
+                  )}
+                  <div className="text-[9px] text-slate-500 font-mono">
+                    TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              )}
+
+              <table className="w-full text-xs font-mono border-t border-b border-dashed border-black py-1 mb-2">
+                <thead>
+                  <tr className="border-b border-dashed border-black">
+                    <th className="text-left py-0.5">Item</th>
+                    <th className="text-right py-0.5">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printOrder.items && printOrder.items.map((item) => (
+                    <tr key={item.id} className="align-top">
+                      <td className="py-0.5 text-[11px]">
+                        {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
+                        {item.item_name}
+                        {item.notes && (
+                          <div className="text-[9px] italic pl-2">
+                            * Note: {item.notes}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {printOrder.notes && (
+                <div className="text-[10px] font-mono border-b border-dashed border-black pb-1 mb-2 italic">
+                  <span className="font-bold">Instructions:</span> {printOrder.notes}
+                </div>
+              )}
+
+              <div className="text-center text-[9px] font-mono pt-1">
+                <p>--- End of Ticket ---</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

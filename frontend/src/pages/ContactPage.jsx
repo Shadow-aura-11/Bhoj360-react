@@ -398,9 +398,14 @@ export default function ContactPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const cleanPhone = form.phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      toast.error('Exactly 10-digit phone number is required');
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await agencyApi.post('/contact', form);
+      const { data } = await agencyApi.post('/contact', { ...form, phone: cleanPhone });
       setSubmitted({ id: data.id });
       toast.success('Message sent!');
     } catch (err) {
@@ -426,7 +431,7 @@ export default function ContactPage() {
                 <polyline points="9,22 9,12 15,12 15,22" />
               </svg>
             </div>
-            <span className="cp-nav-name">RestaurantOS</span>
+            <span className="cp-nav-name">Bhoj360</span>
           </Link>
           <div className="cp-nav-links">
             <Link to="/" className="cp-nav-link">Home</Link>
@@ -605,7 +610,7 @@ export default function ContactPage() {
 
         {/* Footer */}
         <footer className="cp-foot">
-          © {new Date().getFullYear()} RestaurantOS · <Link to="/">Home</Link> · <Link to="/app/login">Dashboard</Link>
+          © {new Date().getFullYear()} Bhoj360 · <Link to="/">Home</Link> · <Link to="/app/login">Dashboard</Link>
         </footer>
       </div>
     </>

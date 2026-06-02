@@ -3,19 +3,19 @@ import React from 'react';
 export default function Testimonials() {
   const reviews = [
     {
-      quote: "TableOS has completely transformed our double-service. The waiter call sync and kitchen display integration saved us over 8 minutes of delay per course. It is an absolute operational masterpiece.",
+      quote: "Bhoj360 has completely transformed our double-service. The waiter call sync and kitchen display integration saved us over 8 minutes of delay per course. It is an absolute operational masterpiece.",
       author: "Chef Jean-Louis Granger",
       role: "Culinary Director, Maison d'Amour Group",
       stars: 5
     },
     {
-      quote: "Managing 12 separate fine-dining locations was an administrative nightmare until we unified under TableOS. The node provisioning speed and aggregated group audits are completely unparalleled.",
+      quote: "Managing 12 separate fine-dining locations was an administrative nightmare until we unified under Bhoj360. The node provisioning speed and aggregated group audits are completely unparalleled.",
       author: "Victoria Sterling",
       role: "Managing Director, Aether Hospitality Group",
       stars: 5
     },
     {
-      quote: "Our guest self-ordering volume jumped by 32% since we deployed the TableOS dynamic QR codes. The client layout is beautiful, lightning fast, and requires zero user app installations.",
+      quote: "Our guest self-ordering volume jumped by 32% since we deployed the Bhoj360 dynamic QR codes. The client layout is beautiful, lightning fast, and requires zero user app installations.",
       author: "Marcus Thorne",
       role: "Owner, Onyx Steakhouse Concepts",
       stars: 5

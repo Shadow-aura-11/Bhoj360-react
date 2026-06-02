@@ -1,0 +1,8 @@
+[mcp_servers.clario]
+command = 'C:\Users\amann\.clario\runtime\node-win32-x64.exe'
+args = ['C:\Users\amann\.clario\mcp-server\index.js']
+
+[mcp_servers.clario.env]
+CLAR_WORKSPACE = 'c:\Users\amann\Downloads\Projects\Restaurant Agency Management System'
+CLAR_API_URL = "https://hub.clario.chat"
+PATH = 'C:\Users\amann\.clario\runtime;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\Program Files\NVIDIA Corporation\NVIDIA NvDLISR;C:\platform-tools;C:\Program Files\dotnet\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Users\amann\.local\bin;C:\Users\amann\AppData\Local\Microsoft\WindowsApps;C:\Users\amann\AppData\Local\Programs\Antigravity\bin;C:\Users\amann\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\amann\AppData\Roaming\npm;C:\Users\amann\AppData\Local\Programs\Antigravity IDE\bin;C:\Users\amann\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin'

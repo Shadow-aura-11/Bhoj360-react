@@ -20,6 +20,8 @@ const PORT = process.env.AGENCY_PORT || 3000;
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
 const AGENCY_SETTINGS_PATH = path.join(__dirname, 'agency-config.json');
 const INQUIRIES_PATH = path.join(__dirname, 'inquiries.json');
+const BLOGS_PATH = path.join(__dirname, 'blogs.json');
+const APPLICATIONS_PATH = path.join(__dirname, 'applications.json');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -321,6 +323,9 @@ app.post('/api/contact', (req, res) => {
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email and message are required' });
   }
+  if (phone && !/^\d{10}$/.test(phone.trim())) {
+    return res.status(400).json({ error: 'Phone number must be exactly 10 digits.' });
+  }
   const data = readInquiries();
   const inquiry = {
     id: 'INQ-' + Date.now().toString(36).toUpperCase(),
@@ -477,7 +482,7 @@ app.get('/api/restaurants/:id/stats', requireAgencyAuth, async (req, res) => {
 
 // PUT /api/restaurants/:id — Edit restaurant details
 app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
-  const { name, active, pins, logo_url, description, logout_redirect_url, login_theme_color } = req.body;
+  const { name, active, pins, logo_url, description, logout_redirect_url, login_theme_color, location, contact_email, contact_phone } = req.body;
   const { id } = req.params;
 
   try {
@@ -494,6 +499,9 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
     if (description !== undefined) entry.description = description;
     if (logout_redirect_url !== undefined) entry.logout_redirect_url = logout_redirect_url;
     if (login_theme_color !== undefined) entry.login_theme_color = login_theme_color;
+    if (location !== undefined) entry.location = location;
+    if (contact_email !== undefined) entry.contact_email = contact_email;
+    if (contact_phone !== undefined) entry.contact_phone = contact_phone;
     
     // Save registry
     fs.writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2), 'utf8');
@@ -508,6 +516,9 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
       if (description !== undefined) config.description = description;
       if (logout_redirect_url !== undefined) config.logout_redirect_url = logout_redirect_url;
       if (login_theme_color !== undefined) config.login_theme_color = login_theme_color;
+      if (location !== undefined) config.location = location;
+      if (contact_email !== undefined) config.contact_email = contact_email;
+      if (contact_phone !== undefined) config.contact_phone = contact_phone;
       if (pins !== undefined) {
         config.pins = {
           ...config.pins,
@@ -663,6 +674,173 @@ app.post('/api/restaurants/:id/payments', requireAgencyAuth, async (req, res) =>
   }
 });
 
+// POST /api/restaurants/:id/send-invoice — Send subscription invoice email to restaurant contact
+app.post('/api/restaurants/:id/send-invoice', requireAgencyAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const registry = readRegistry();
+    const entry = registry.restaurants.find((r) => r.id === id);
+    if (!entry) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const contactEmail = entry.contact_email || '';
+    const contactPhone = entry.contact_phone || '';
+
+    if (!contactEmail) {
+      return res.status(400).json({ error: 'Restaurant has no contact email registered' });
+    }
+
+    const latestPayment = entry.paymentHistory && entry.paymentHistory.length > 0 
+      ? entry.paymentHistory[entry.paymentHistory.length - 1] 
+      : { id: 'INV-MOCK', date: new Date().toISOString().split('T')[0], amount: entry.subscription?.price || 999, planName: entry.subscription?.planName || 'Bronze Plan', method: 'UPI', transactionId: 'TXN-MOCK', status: 'Paid' };
+
+    const agencySettings = readAgencySettings();
+    const transporter = createTransporter(agencySettings);
+
+    const emailSubject = `🧾 Invoice for your ${latestPayment.planName} Subscription`;
+    const emailBody = `
+      <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; color: #1e293b;">
+        <h2 style="color: #2563eb; margin-bottom: 4px;">${agencySettings.agency_name || 'Restaurant SaaS Platform'}</h2>
+        <p style="font-size: 14px; color: #64748b; margin-top: 0;">Subscription Invoice</p>
+        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 16px 0;" />
+        <div style="font-size: 13px; margin-bottom: 16px;">
+          <div><strong>Bill To:</strong> ${entry.name}</div>
+          <div><strong>Restaurant ID:</strong> ${entry.id}</div>
+          <div><strong>Location:</strong> ${entry.location || 'N/A'}</div>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #64748b;">Plan:</span>
+            <strong>${latestPayment.planName}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #64748b;">Invoice ID:</span>
+            <span style="font-family: monospace;">${latestPayment.id}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #64748b;">Transaction Ref:</span>
+            <span style="font-family: monospace;">${latestPayment.transactionId || 'N/A'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #64748b;">Paid Via:</span>
+            <span>${latestPayment.method}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 8px;">
+            <span style="font-weight: bold;">Amount Paid:</span>
+            <strong style="color: #16a34a; font-size: 15px;">₹${latestPayment.amount}</strong>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 24px;">Thank you for partnering with us! 🚀</p>
+      </div>
+    `;
+
+    let emailSent = false;
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${agencySettings.agency_name || 'Restaurant Agency'}" <${agencySettings.smtp_user}>`,
+        to: contactEmail,
+        subject: emailSubject,
+        html: emailBody
+      });
+      emailSent = true;
+    } else {
+      console.log(`\n  ╔═════════════════════════════════════════════════════════════════╗`);
+      console.log(`  ║  🧾 Mock Invoice Email (SMTP Not Setup)                        ║`);
+      console.log(`  ║  To: ${contactEmail}                                             ║`);
+      console.log(`  ║  Subject: ${emailSubject}                                       ║`);
+      console.log(`  ║  Amount: ₹${latestPayment.amount} | Plan: ${latestPayment.planName}               ║`);
+      console.log(`  ╚═════════════════════════════════════════════════════════════════╝\n`);
+    }
+
+    // Mock WhatsApp/SMS console log
+    if (contactPhone) {
+      console.log(`\n  [WhatsApp/SMS Invoice Reminder sent to ${contactPhone}]:`);
+      console.log(`  "Dear ${entry.name} Admin, a payment of ₹${latestPayment.amount} for your ${latestPayment.planName} has been received. Invoice ID: ${latestPayment.id}. Thank you!"\n`);
+    }
+
+    res.json({ message: 'Invoice sent successfully', emailSent, mockSmsSent: !!contactPhone });
+  } catch (err) {
+    console.error('[Agency] Error sending invoice:', err.message);
+    res.status(500).json({ error: 'Failed to send invoice' });
+  }
+});
+
+// POST /api/restaurants/:id/send-reminder — Send subscription payment reminder email
+app.post('/api/restaurants/:id/send-reminder', requireAgencyAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const registry = readRegistry();
+    const entry = registry.restaurants.find((r) => r.id === id);
+    if (!entry) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const contactEmail = entry.contact_email || '';
+    const contactPhone = entry.contact_phone || '';
+
+    if (!contactEmail) {
+      return res.status(400).json({ error: 'Restaurant has no contact email registered' });
+    }
+
+    const sub = entry.subscription || { planName: 'Bronze Plan', price: 999, billingCycle: 'Monthly', status: 'Trial', nextBillingDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] };
+
+    const agencySettings = readAgencySettings();
+    const transporter = createTransporter(agencySettings);
+
+    const emailSubject = `⚠️ Reminder: Action Required on your ${sub.planName} Subscription`;
+    const emailBody = `
+      <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; color: #1e293b;">
+        <h2 style="color: #ea580c; margin-bottom: 4px;">${agencySettings.agency_name || 'Restaurant SaaS Platform'}</h2>
+        <p style="font-size: 14px; color: #64748b; margin-top: 0;">Payment Due Reminder</p>
+        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 16px 0;" />
+        <p style="font-size: 13px; line-height: 1.5;">This is a friendly reminder that your subscription payment for <strong>${entry.name}</strong> is due soon or requires renewal.</p>
+        <div style="background: #fff7ed; padding: 16px; border-radius: 12px; margin-bottom: 16px; font-size: 13px; border: 1px solid #ffedd5;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #c2410c;">Active Plan:</span>
+            <strong>${sub.planName} (${sub.billingCycle})</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #c2410c;">Due Date:</span>
+            <strong>${sub.nextBillingDate || 'N/A'}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed #ffedd5; padding-top: 8px; margin-top: 8px;">
+            <span style="font-weight: bold; color: #c2410c;">Renewal Price:</span>
+            <strong style="font-size: 15px; color: #ea580c;">₹${sub.price}</strong>
+          </div>
+        </div>
+        <p style="font-size: 13px;">Please complete the payment inside the billing logs or contact the administrator to avoid service interruption.</p>
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 24px;">Thank you for partnering with us! 🚀</p>
+      </div>
+    `;
+
+    let emailSent = false;
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${agencySettings.agency_name || 'Restaurant Agency'}" <${agencySettings.smtp_user}>`,
+        to: contactEmail,
+        subject: emailSubject,
+        html: emailBody
+      });
+      emailSent = true;
+    } else {
+      console.log(`\n  ╔═════════════════════════════════════════════════════════════════╗`);
+      console.log(`  ║  ⚠️ Mock Payment Reminder Email (SMTP Not Setup)                 ║`);
+      console.log(`  ║  To: ${contactEmail}                                             ║`);
+      console.log(`  ║  Subject: ${emailSubject}                                       ║`);
+      console.log(`  ║  Due Date: ${sub.nextBillingDate} | Amount: ₹${sub.price}                     ║`);
+      console.log(`  ╚═════════════════════════════════════════════════════════════════╝\n`);
+    }
+
+    // Mock WhatsApp/SMS console log
+    if (contactPhone) {
+      console.log(`\n  [WhatsApp/SMS Payment Reminder sent to ${contactPhone}]:`);
+      console.log(`  "Dear ${entry.name} Admin, this is a reminder that your ${sub.planName} subscription payment of ₹${sub.price} is due on ${sub.nextBillingDate}. Please settle to continue using the service."\n`);
+    }
+
+    res.json({ message: 'Reminder sent successfully', emailSent, mockSmsSent: !!contactPhone });
+  } catch (err) {
+    console.error('[Agency] Error sending reminder:', err.message);
+    res.status(500).json({ error: 'Failed to send payment reminder' });
+  }
+});
+
 // ─── Agency Settings Routes ──────────────────────────────────
 
 // GET /api/agency/settings — Get agency configs
@@ -670,12 +848,17 @@ app.get('/api/agency/settings', requireAgencyAuth, (req, res) => {
   const settings = readAgencySettings();
   // Never expose password_hash or smtp_pass to frontend
   const { password_hash, smtp_pass, ...safe } = settings;
-  res.json({ ...safe, smtp_pass_set: !!smtp_pass });
+  res.json({ 
+    ...safe, 
+    smtp_pass_set: !!smtp_pass,
+    whatsapp_number: settings.whatsapp_number || '',
+    social_links: settings.social_links || { facebook: '', twitter: '', instagram: '', linkedin: '' }
+  });
 });
 
 // PUT /api/agency/settings — Update agency configs
 app.put('/api/agency/settings', requireAgencyAuth, (req, res) => {
-  const { logo_url, agency_name, agency_url, admin_email, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure } = req.body;
+  const { logo_url, agency_name, agency_url, admin_email, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, whatsapp_number, social_links } = req.body;
   const current = readAgencySettings();
   const settings = {
     ...current,
@@ -687,6 +870,8 @@ app.put('/api/agency/settings', requireAgencyAuth, (req, res) => {
     smtp_port: smtp_port !== undefined ? (smtp_port || 587) : (current.smtp_port || 587),
     smtp_user: smtp_user !== undefined ? (smtp_user || '') : (current.smtp_user || ''),
     smtp_secure: smtp_secure !== undefined ? smtp_secure : (current.smtp_secure || false),
+    whatsapp_number: whatsapp_number !== undefined ? (whatsapp_number || '') : (current.whatsapp_number || ''),
+    social_links: social_links !== undefined ? (social_links || { facebook: '', twitter: '', instagram: '', linkedin: '' }) : (current.social_links || { facebook: '', twitter: '', instagram: '', linkedin: '' }),
   };
   // Only update smtp_pass if provided (non-empty)
   if (smtp_pass && smtp_pass !== '') {
@@ -702,6 +887,18 @@ app.put('/api/agency/settings', requireAgencyAuth, (req, res) => {
     console.error('[Agency] Failed to save settings:', err.message);
     res.status(500).json({ error: 'Failed to save settings' });
   }
+});
+
+// GET /api/agency/settings/public — Expose public branding info
+app.get('/api/agency/settings/public', (req, res) => {
+  const settings = readAgencySettings();
+  res.json({
+    logo_url: settings.logo_url || '',
+    agency_name: settings.agency_name || 'Bhoj360',
+    agency_url: settings.agency_url || '',
+    whatsapp_number: settings.whatsapp_number || '8299443154', // default fallback
+    social_links: settings.social_links || { facebook: '', twitter: '', instagram: '', linkedin: '' }
+  });
 });
 
 // GET /api/stats — Get platform stats for marketing site (public)
@@ -745,6 +942,167 @@ app.get('/api/stats', async (req, res) => {
   } catch (err) {
     res.json({ totalRestaurants: 142, totalOrdersToday: 1480 });
   }
+});
+// ─── Blogs Helpers & Endpoints ─────────────────────────────────
+
+function readBlogs() {
+  try {
+    if (fs.existsSync(BLOGS_PATH)) {
+      return JSON.parse(fs.readFileSync(BLOGS_PATH, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveBlogs(blogs) {
+  fs.writeFileSync(BLOGS_PATH, JSON.stringify(blogs, null, 2), 'utf8');
+}
+
+// GET /api/blogs — Get all blogs (public)
+app.get('/api/blogs', (req, res) => {
+  const blogs = readBlogs();
+  res.json(blogs);
+});
+
+// GET /api/blogs/:slug — Get a single blog by slug (public)
+app.get('/api/blogs/:slug', (req, res) => {
+  const blogs = readBlogs();
+  const blog = blogs.find(b => b.slug === req.params.slug);
+  if (!blog) {
+    return res.status(404).json({ error: 'Blog post not found' });
+  }
+  res.json(blog);
+});
+
+// POST /api/blogs — Create or Update a blog post (requires auth)
+app.post('/api/blogs', requireAgencyAuth, (req, res) => {
+  const { id, title, content, summary, author, image_url, published_at } = req.body;
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title and content are required' });
+  }
+
+  const blogs = readBlogs();
+  
+  // Generate a URL-friendly slug
+  let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  
+  // Ensure slug uniqueness
+  let finalSlug = slug;
+  let counter = 1;
+  while (blogs.some(b => b.slug === finalSlug && b.id !== id)) {
+    finalSlug = `${slug}-${counter}`;
+    counter++;
+  }
+
+  if (id) {
+    // Update existing blog
+    const index = blogs.findIndex(b => b.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Blog not found' });
+    }
+    blogs[index] = {
+      ...blogs[index],
+      title,
+      slug: finalSlug,
+      content,
+      summary: summary || '',
+      author: author || 'Bhoj360 Team',
+      image_url: image_url || '',
+      updated_at: new Date().toISOString()
+    };
+    saveBlogs(blogs);
+    res.json({ message: 'Blog updated successfully', blog: blogs[index] });
+  } else {
+    // Create new blog
+    const newBlog = {
+      id: crypto.randomBytes(8).toString('hex'),
+      title,
+      slug: finalSlug,
+      content,
+      summary: summary || '',
+      author: author || 'Bhoj360 Team',
+      image_url: image_url || '',
+      published_at: published_at || new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+    blogs.push(newBlog);
+    saveBlogs(blogs);
+    res.status(201).json({ message: 'Blog created successfully', blog: newBlog });
+  }
+});
+
+// DELETE /api/blogs/:id — Delete a blog post (requires auth)
+app.delete('/api/blogs/:id', requireAgencyAuth, (req, res) => {
+  const blogs = readBlogs();
+  const index = blogs.findIndex(b => b.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Blog not found' });
+  }
+  blogs.splice(index, 1);
+  saveBlogs(blogs);
+  res.json({ message: 'Blog deleted successfully' });
+});
+
+// ─── Applications Helpers & Endpoints ─────────────────────────
+
+function readApplications() {
+  try {
+    if (fs.existsSync(APPLICATIONS_PATH)) {
+      return JSON.parse(fs.readFileSync(APPLICATIONS_PATH, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveApplications(applications) {
+  fs.writeFileSync(APPLICATIONS_PATH, JSON.stringify(applications, null, 2), 'utf8');
+}
+
+// POST /api/applications — Public application submission
+app.post('/api/applications', (req, res) => {
+  const { name, email, phone, role, coverLetter, resumeLink } = req.body;
+  if (!name || !email || !phone || !role) {
+    return res.status(400).json({ error: 'Name, email, phone, and role are required' });
+  }
+
+  // Validate phone is exactly 10 digits
+  if (!/^\d{10}$/.test(phone.trim())) {
+    return res.status(400).json({ error: 'Phone number must be exactly 10 digits.' });
+  }
+
+  const applications = readApplications();
+  const application = {
+    id: 'APP-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+    name,
+    email,
+    phone: phone.trim(),
+    role,
+    coverLetter: coverLetter || '',
+    resumeLink: resumeLink || '',
+    createdAt: new Date().toISOString(),
+  };
+
+  applications.unshift(application);
+  saveApplications(applications);
+  res.status(201).json({ message: 'Application submitted successfully', application });
+});
+
+// GET /api/applications — Retrieve all applications (protected)
+app.get('/api/applications', requireAgencyAuth, (req, res) => {
+  const applications = readApplications();
+  res.json(applications);
+});
+
+// DELETE /api/applications/:id — Delete an application (protected)
+app.delete('/api/applications/:id', requireAgencyAuth, (req, res) => {
+  const applications = readApplications();
+  const index = applications.findIndex(app => app.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Application not found' });
+  }
+  applications.splice(index, 1);
+  saveApplications(applications);
+  res.json({ message: 'Application deleted successfully' });
 });
 
 // ─── Health Check ────────────────────────────────────────────

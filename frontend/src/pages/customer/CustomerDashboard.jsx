@@ -32,6 +32,7 @@ export default function CustomerDashboard() {
   const [notes, setNotes] = useState('');
   const [restaurantName, setRestaurantName] = useState('Restaurant');
   const [logoutRedirectUrl, setLogoutRedirectUrl] = useState('');
+  const [theme, setTheme] = useState('classic');
 
   const addToCart = (item) => {
     setCart((prev) => {
@@ -103,6 +104,8 @@ export default function CustomerDashboard() {
   // Pay Modal states
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payMethod, setPayMethod] = useState('UPI'); // 'UPI' | 'CARD' | 'CASH'
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('');
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
   // Sync session state from storage
   useEffect(() => {
@@ -125,11 +128,11 @@ export default function CustomerDashboard() {
 
         // Fetch health config to get restaurant name
         const { data: health } = await api.get('/health');
-        if (health && health.name) {
-          setRestaurantName(health.name);
-        }
-        if (health && health.logout_redirect_url) {
-          setLogoutRedirectUrl(health.logout_redirect_url);
+        if (health) {
+          if (health.name) setRestaurantName(health.name);
+          if (health.logout_redirect_url) setLogoutRedirectUrl(health.logout_redirect_url);
+          if (health.google_review_url) setGoogleReviewUrl(health.google_review_url);
+          if (health.theme) setTheme(health.theme);
         }
       } catch (err) {
         console.error(err);
@@ -197,6 +200,7 @@ export default function CustomerDashboard() {
         toast.success(`Your order has been served. Enjoy your meal! 🍽️`, { id: `order-${order.id}`, duration: 5000 });
       } else if (status === 'paid') {
         toast.success(`Order settled. Thank you for dining with us! 💰`, { id: `order-${order.id}`, duration: 5000 });
+        setReviewModalOpen(true);
       }
     };
 
@@ -214,7 +218,8 @@ export default function CustomerDashboard() {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (loginStep === 1) {
-      if (!customerPhone.trim() || customerPhone.trim().length < 10) {
+      const cleanPhone = customerPhone.trim().replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
         toast.error('Please enter a valid 10-digit phone number');
         return;
       }
@@ -395,20 +400,119 @@ export default function CustomerDashboard() {
     );
   }
 
+  const themeStyles = {
+    classic: {
+      bg: "#fafaf9",
+      bgSub: "#f5f5f4",
+      text: "#1c1917",
+      textSub: "#78716c",
+      primary: "#d97706", // amber-600
+      primaryHover: "#b45309",
+      accentBg: "#fef3c7",
+      border: "#e7e5e4"
+    },
+    onyx: {
+      bg: "#0a0a0a",
+      bgSub: "#171717",
+      text: "#f5f5f5",
+      textSub: "#a3a3a3",
+      primary: "#f59e0b", // amber-500
+      primaryHover: "#d97706",
+      accentBg: "#262626",
+      border: "#262626"
+    },
+    emerald: {
+      bg: "#fafaf9",
+      bgSub: "#f4f4f5",
+      text: "#0f172a",
+      textSub: "#475569",
+      primary: "#059669", // emerald-600
+      primaryHover: "#047857",
+      accentBg: "#ecfdf5",
+      border: "#e2e8f0"
+    },
+    ruby: {
+      bg: "#0c0a09",
+      bgSub: "#1c1917",
+      text: "#f5f5f4",
+      textSub: "#a8a29e",
+      primary: "#e11d48", // rose-600
+      primaryHover: "#be123c",
+      accentBg: "#292524",
+      border: "#292524"
+    },
+    amber: {
+      bg: "#faf6f0",
+      bgSub: "#f4ebe1",
+      text: "#1c1917",
+      textSub: "#78716c",
+      primary: "#b45309", // amber-700
+      primaryHover: "#92400e",
+      accentBg: "#fef3c7",
+      border: "#f5e6d3"
+    }
+  };
+
+  const style = themeStyles[theme] || themeStyles.classic;
+
   return (
-    <div className="min-h-screen bg-[#f0fdf4] text-slate-800 flex flex-col font-body">
+    <div className="min-h-screen theme-bg-color theme-text-color flex flex-col font-body">
+      <style>{`
+        :root {
+          --theme-primary: ${style.primary};
+          --theme-primary-hover: ${style.primaryHover};
+          --theme-bg: ${style.bg};
+          --theme-bg-sub: ${style.bgSub};
+          --theme-text: ${style.text};
+          --theme-text-sub: ${style.textSub};
+          --theme-accent-bg: ${style.accentBg};
+          --theme-border: ${style.border};
+        }
+        .theme-bg-color {
+          background-color: var(--theme-bg) !important;
+        }
+        .theme-text-color {
+          color: var(--theme-text) !important;
+        }
+        .theme-text-sub-color {
+          color: var(--theme-text-sub) !important;
+        }
+        .theme-primary-color {
+          color: var(--theme-primary) !important;
+        }
+        .theme-primary-bg {
+          background-color: var(--theme-primary) !important;
+        }
+        .theme-primary-bg-hover:hover {
+          background-color: var(--theme-primary-hover) !important;
+        }
+        .theme-accent-bg {
+          background-color: var(--theme-accent-bg) !important;
+        }
+        .theme-border-color {
+          border-color: var(--theme-border) !important;
+        }
+        .active-tab {
+          border-bottom-color: var(--theme-primary) !important;
+          color: var(--theme-primary) !important;
+        }
+        .inactive-tab {
+          border-bottom-color: transparent !important;
+          color: var(--theme-text-sub) !important;
+        }
+      `}</style>
       
       {/* Header bar */}
-      <header className="h-16 flex items-center justify-between px-6 border-b border-green-100 bg-white/70 backdrop-blur-md sticky top-0 z-20 shadow-sm flex-shrink-0">
+      <header className="h-16 flex items-center justify-between px-6 border-b theme-border-color theme-bg-color sticky top-0 z-20 shadow-sm flex-shrink-0">
         <div>
-          <span className="text-[9px] font-bold text-emerald-600 tracking-widest block uppercase font-mono">{restaurantName}</span>
-          <h1 className="text-sm font-bold font-display text-emerald-950">Table {activeOrder?.table_number || session.tableNumber}</h1>
+          <span className="text-[9px] font-bold theme-primary-color tracking-widest block uppercase font-mono">{restaurantName}</span>
+          <h1 className="text-sm font-bold font-display theme-text-color">Table {activeOrder?.table_number || session.tableNumber}</h1>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleCallWaiter}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-sm transition-transform hover:-translate-y-0.5"
+            className="px-3 py-1.5 theme-primary-bg theme-primary-bg-hover text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-sm transition-transform hover:-translate-y-0.5"
           >
             <Bell className="w-3.5 h-3.5" />
             <span>Call Waiter</span>
@@ -425,7 +529,7 @@ export default function CustomerDashboard() {
       </header>
 
       {/* Tabs */}
-      <nav className="flex bg-white border-b border-green-100 flex-shrink-0">
+      <nav className="flex theme-bg-color border-b theme-border-color flex-shrink-0">
         {[
           { id: 'menu', label: 'Our Menu', icon: Soup },
           { id: 'order', label: 'My Order', icon: Clipboard },
@@ -436,8 +540,8 @@ export default function CustomerDashboard() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 py-3.5 text-[11px] font-bold flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${
               activeTab === tab.id
-                ? 'border-emerald-600 text-emerald-700 bg-emerald-500/5 font-black'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                ? 'active-tab theme-accent-bg font-black'
+                : 'inactive-tab hover:theme-text-color'
             }`}
           >
             <tab.icon className="w-4 h-4 flex-shrink-0" />
@@ -647,7 +751,9 @@ export default function CustomerDashboard() {
                   {activeOrder.items?.map((item) => (
                     <div key={item.id} className="py-2.5 flex justify-between gap-3 text-sm">
                       <span className="text-slate-655">
-                        <strong className="text-emerald-600 font-mono font-bold">x{item.quantity}</strong> {item.item_name}
+                        <strong className="text-emerald-600 font-mono font-bold">x{item.quantity}</strong>{' '}
+                        {item.is_addon ? <span className="text-rose-600 font-bold mr-1">(Add-on)</span> : ''}
+                        {item.item_name}
                       </span>
                       <span className="text-slate-400 font-mono text-xs">₹{item.price * item.quantity}</span>
                     </div>
@@ -778,6 +884,41 @@ export default function CustomerDashboard() {
               <span>View Basket</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Google Review Modal Popup */}
+      {reviewModalOpen && googleReviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setReviewModalOpen(false)} />
+          <div className="relative w-full max-w-sm bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center text-center gap-4 animate-slide-up border border-slate-100 text-slate-800">
+            <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-1">
+              <span className="text-3xl">⭐️</span>
+            </div>
+            
+            <h3 className="font-display font-black text-xl text-slate-900">How was your dining experience?</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Thank you for dining with us! Your feedback helps us serve you better. Please take a moment to leave us a review on Google.
+            </p>
+            
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                onClick={() => setReviewModalOpen(false)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors"
+              >
+                Maybe Later
+              </button>
+              <a
+                href={googleReviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setReviewModalOpen(false)}
+                className="flex-1 py-3 theme-primary-bg theme-primary-bg-hover text-white font-bold rounded-2xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10"
+              >
+                <span>Write Review</span>
+              </a>
+            </div>
           </div>
         </div>
       )}

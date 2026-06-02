@@ -33,6 +33,8 @@ export default function Analytics() {
   const [hourlyTraffic, setHourlyTraffic] = useState([]);
   const [kpis, setKpis] = useState({
     today: 0,
+    cashRevenue: 0,
+    onlineRevenue: 0,
     week: 0,
     month: 0,
     allTime: 0,
@@ -95,6 +97,8 @@ export default function Analytics() {
       // Aggregate mock or real KPIs
       setKpis({
         today: summary.revenue || 0,
+        cashRevenue: summary.cashRevenue || 0,
+        onlineRevenue: summary.onlineRevenue || 0,
         week: revWeek.reduce((sum, d) => sum + d.revenue, 0) || 0,
         month: (revWeek.reduce((sum, d) => sum + d.revenue, 0) * 4) || 0,
         allTime: (revWeek.reduce((sum, d) => sum + d.revenue, 0) * 12) || 0,
@@ -175,6 +179,9 @@ export default function Analytics() {
           <div className="bg-white border border-slate-200 p-5 rounded-2.5xl flex flex-col justify-between shadow-sm">
             <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Today's Total</span>
             <span className="text-2xl font-bold font-mono text-emerald-600 mt-2">₹{kpis.today}</span>
+            <span className="text-[9px] font-medium text-slate-500 font-mono mt-1">
+              Cash: ₹{kpis.cashRevenue} | UPI: ₹{kpis.onlineRevenue}
+            </span>
           </div>
           <div className="bg-white border border-slate-200 p-5 rounded-2.5xl flex flex-col justify-between shadow-sm">
             <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">This Week</span>

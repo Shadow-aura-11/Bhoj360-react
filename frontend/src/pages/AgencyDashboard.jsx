@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building, Calendar, DollarSign, Activity, FileSpreadsheet, Play, Power, ExternalLink, RefreshCw, Copy, Check, Info, Settings, Edit3, Image, ShieldAlert, CheckCircle, Trash2, AlertTriangle, CreditCard, History, LogOut, Mail, MessageSquare, Eye, Server } from 'lucide-react';
+import { Plus, Building, Calendar, DollarSign, Activity, FileSpreadsheet, Play, Power, ExternalLink, RefreshCw, Copy, Check, Info, Settings, Edit3, Image, ShieldAlert, CheckCircle, Trash2, AlertTriangle, CreditCard, History, LogOut, Mail, MessageSquare, Eye, Server, Search, MapPin, Bell, Printer } from 'lucide-react';
 import { agencyApi } from '../api/client';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
@@ -18,12 +18,37 @@ export default function AgencyDashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState('');
+  
+  // Search and Location filter states
+  const [searchName, setSearchName] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+
+  const filteredRestaurants = restaurants.filter((res) => {
+    const nameMatch = (res.name || '').toLowerCase().includes(searchName.toLowerCase().trim());
+    const locationMatch = (res.location || '').toLowerCase().includes(filterLocation.toLowerCase().trim());
+    return nameMatch && locationMatch;
+  });
 
   // Agency Logo, Name, URL State
   const [logoUrl, setLogoUrl] = useState('');
   const [agencyName, setAgencyName] = useState('');
   const [agencyUrl, setAgencyUrl] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Agency Contact & Social State
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [socialLinks, setSocialLinks] = useState({
+    facebook: '',
+    twitter: '',
+    instagram: '',
+    linkedin: ''
+  });
+  const [savingSocials, setSavingSocials] = useState(false);
+
+  // Applications state
+  const [applications, setApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   // Delete confirmation state: { [restaurantId]: { countdown: number, timer: any } }
   const [deleteState, setDeleteState] = useState({});
@@ -36,8 +61,11 @@ export default function AgencyDashboard() {
     description: '',
     logout_redirect_url: '',
     login_theme_color: '#fafaf9',
+    location: '',
+    contact_email: '',
+    contact_phone: '',
     pins: {
-      admin: '1111',
+      admin: 'admin123',
       waiter: '2222',
       counter: '3333',
       cashier: '4444',
@@ -55,6 +83,9 @@ export default function AgencyDashboard() {
     description: '',
     logout_redirect_url: '',
     login_theme_color: '#fafaf9',
+    location: '',
+    contact_email: '',
+    contact_phone: '',
     pins: {
       admin: '',
       waiter: '',
@@ -63,6 +94,12 @@ export default function AgencyDashboard() {
       customer: '',
     }
   });
+
+  // Billing Tab Search and Filter states
+  const [billingSearchName, setBillingSearchName] = useState('');
+  const [billingFilterLocation, setBillingFilterLocation] = useState('');
+  const [billingFilterPlan, setBillingFilterPlan] = useState('');
+  const [billingFilterDate, setBillingFilterDate] = useState('');
 
   // Tab navigation state
   const [activeTab, setActiveTab] = useState('tenants'); // 'tenants' | 'billing' | 'inquiries' | 'settings'
@@ -109,6 +146,74 @@ export default function AgencyDashboard() {
   // Password change state
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [changingPw, setChangingPw] = useState(false);
+
+  // WordPress-style Blog states
+  const [blogs, setBlogs] = useState([]);
+  const [loadingBlogs, setLoadingBlogs] = useState(false);
+  const [editingBlog, setEditingBlog] = useState(null);
+  const [blogFormData, setBlogFormData] = useState({
+    title: '',
+    summary: '',
+    content: '',
+    author: 'Bhoj360 Team',
+    image_url: ''
+  });
+
+  const fetchBlogs = async () => {
+    setLoadingBlogs(true);
+    try {
+      const { data } = await agencyApi.get('/blogs');
+      setBlogs(data);
+    } catch (err) {
+      toast.error('Failed to load blogs');
+    } finally {
+      setLoadingBlogs(false);
+    }
+  };
+
+  const handleBlogSubmit = async (e) => {
+    e.preventDefault();
+    if (!blogFormData.title || !blogFormData.content) {
+      toast.error('Title and content are required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = editingBlog ? { ...blogFormData, id: editingBlog.id } : blogFormData;
+      await agencyApi.post('/blogs', payload);
+      toast.success(editingBlog ? 'Blog post updated!' : 'Blog post created!');
+      setEditingBlog(null);
+      setBlogFormData({ title: '', summary: '', content: '', author: 'Bhoj360 Team', image_url: '' });
+      fetchBlogs();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save blog');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStartEditBlog = (blog) => {
+    setEditingBlog(blog);
+    setBlogFormData({
+      title: blog.title || '',
+      summary: blog.summary || '',
+      content: blog.content || '',
+      author: blog.author || 'Bhoj360 Team',
+      image_url: blog.image_url || ''
+    });
+  };
+
+  const handleDeleteBlog = async (id) => {
+    if (confirm('Are you sure you want to delete this blog post?')) {
+      try {
+        await agencyApi.delete(`/blogs/${id}`);
+        toast.success('Blog post deleted successfully');
+        fetchBlogs();
+      } catch (err) {
+        toast.error('Failed to delete blog');
+      }
+    }
+  };
 
   const handleStartEditSubscription = (res) => {
     setEditingSubscription(res);
@@ -189,6 +294,92 @@ export default function AgencyDashboard() {
     }
   };
 
+  const handleSendInvoice = async (res) => {
+    if (!res.contact_email) {
+      if (confirm('This restaurant does not have a contact email configured. Would you like to configure it now?')) {
+        handleStartEdit(res);
+      }
+      return;
+    }
+    try {
+      toast.loading('Sending invoice...', { id: 'send-invoice-toast' });
+      await agencyApi.post(`/restaurants/${res.id}/send-invoice`);
+      toast.success(`Invoice sent to ${res.contact_email}`, { id: 'send-invoice-toast' });
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to send invoice', { id: 'send-invoice-toast' });
+    }
+  };
+
+  const handleSendReminder = async (res) => {
+    if (!res.contact_email) {
+      if (confirm('This restaurant does not have a contact email registered. Would you like to configure it now?')) {
+        handleStartEdit(res);
+      }
+      return;
+    }
+    try {
+      toast.loading('Sending payment reminder...', { id: 'send-reminder-toast' });
+      await agencyApi.post(`/restaurants/${res.id}/send-reminder`);
+      toast.success(`Reminder sent to ${res.contact_email}`, { id: 'send-reminder-toast' });
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to send reminder', { id: 'send-reminder-toast' });
+    }
+  };
+
+  const getPlanBreakdown = () => {
+    const plans = {};
+    restaurants.forEach((r) => {
+      const sub = r.subscription || {};
+      const status = (sub.status || '').toLowerCase();
+      const planName = sub.planName || 'Bronze Plan';
+      if (!plans[planName]) {
+        plans[planName] = { active: 0, trial: 0, mrr: 0, collected: 0 };
+      }
+      if (status === 'active') {
+        plans[planName].active++;
+        const price = Number(sub.price) || 0;
+        if (sub.billingCycle === 'Monthly') plans[planName].mrr += price;
+        else if (sub.billingCycle === 'Quarterly') plans[planName].mrr += price / 3;
+        else if (sub.billingCycle === 'Annually') plans[planName].mrr += price / 12;
+      } else if (status === 'trial') {
+        plans[planName].trial++;
+      }
+      if (r.paymentHistory && Array.isArray(r.paymentHistory)) {
+        r.paymentHistory.forEach((p) => {
+          if (p.status === 'Paid') {
+            plans[planName].collected += Number(p.amount) || 0;
+          }
+        });
+      }
+    });
+    return plans;
+  };
+
+  const filteredBillingRestaurants = restaurants.filter((res) => {
+    const sub = res.subscription || {};
+    const nameMatch = (res.name || '').toLowerCase().includes(billingSearchName.toLowerCase().trim());
+    const locationMatch = (res.location || '').toLowerCase().includes(billingFilterLocation.toLowerCase().trim());
+    const planMatch = (sub.planName || '').toLowerCase().includes(billingFilterPlan.toLowerCase().trim());
+    
+    let dateMatch = true;
+    if (billingFilterDate) {
+      const targetDate = billingFilterDate.trim();
+      const nextDue = sub.nextBillingDate || '';
+      const start = sub.startDate || '';
+      const matchesDueOrStart = nextDue.includes(targetDate) || start.includes(targetDate);
+      
+      let matchesHistory = false;
+      if (res.paymentHistory && Array.isArray(res.paymentHistory)) {
+        matchesHistory = res.paymentHistory.some(p => (p.date || '').includes(targetDate));
+      }
+      dateMatch = matchesDueOrStart || matchesHistory;
+    }
+    
+    return nameMatch && locationMatch && planMatch && dateMatch;
+  });
+
   const getBillingStats = () => {
     let mrr = 0;
     let totalCollected = 0;
@@ -240,7 +431,6 @@ export default function AgencyDashboard() {
       // Aggregate overall stats
       let activeCount = 0;
       let totalOrders = 0;
-      let totalRev = 0;
 
       const detailedPromises = list.map(async (r) => {
         if (!r.active) return r;
@@ -248,7 +438,6 @@ export default function AgencyDashboard() {
           const statsRes = await agencyApi.get(`/restaurants/${r.id}/stats`);
           const summary = statsRes.data;
           totalOrders += summary.ordersCount || 0;
-          totalRev += summary.revenue || 0;
           if (r.online) activeCount++;
           return { ...r, stats: summary };
         } catch {
@@ -259,11 +448,23 @@ export default function AgencyDashboard() {
       const resolved = await Promise.all(detailedPromises);
       setRestaurants(resolved);
 
+      // Compute total collected from subscriptions
+      let totalSubsCollected = 0;
+      resolved.forEach((r) => {
+        if (r.paymentHistory && Array.isArray(r.paymentHistory)) {
+          r.paymentHistory.forEach((p) => {
+            if (p.status === 'Paid') {
+              totalSubsCollected += Number(p.amount) || 0;
+            }
+          });
+        }
+      });
+
       setStats({
         total: list.length,
         active: activeCount || list.filter((x) => x.online).length,
         orders: totalOrders,
-        revenue: totalRev,
+        revenue: totalSubsCollected,
       });
     } catch (err) {
       console.error(err);
@@ -279,6 +480,8 @@ export default function AgencyDashboard() {
       setLogoUrl(data.logo_url || '');
       setAgencyName(data.agency_name || '');
       setAgencyUrl(data.agency_url || '');
+      setWhatsappNumber(data.whatsapp_number || '');
+      setSocialLinks(data.social_links || { facebook: '', twitter: '', instagram: '', linkedin: '' });
       // Load SMTP/email settings
       setSmtpSettings(prev => ({
         ...prev,
@@ -291,6 +494,32 @@ export default function AgencyDashboard() {
       }));
     } catch (err) {
       console.warn('Failed to load agency settings', err);
+    }
+  };
+
+  const fetchApplications = async () => {
+    setLoadingApplications(true);
+    try {
+      const { data } = await agencyApi.get('/applications');
+      setApplications(data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load job applications');
+    } finally {
+      setLoadingApplications(false);
+    }
+  };
+
+  const handleDeleteApplication = async (id) => {
+    if (confirm('Are you sure you want to delete this job application?')) {
+      try {
+        await agencyApi.delete(`/applications/${id}`);
+        setApplications(prev => prev.filter(app => app.id !== id));
+        if (selectedApplication?.id === id) setSelectedApplication(null);
+        toast.success('Application deleted successfully');
+      } catch (err) {
+        toast.error('Failed to delete application');
+      }
     }
   };
 
@@ -398,6 +627,12 @@ export default function AgencyDashboard() {
     if (activeTab === 'inquiries') {
       fetchInquiries();
     }
+    if (activeTab === 'blog') {
+      fetchBlogs();
+    }
+    if (activeTab === 'applications') {
+      fetchApplications();
+    }
   }, [activeTab]);
 
   const handleCreate = async (e) => {
@@ -430,6 +665,9 @@ export default function AgencyDashboard() {
         description: editFormData.description,
         logout_redirect_url: editFormData.logout_redirect_url,
         login_theme_color: editFormData.login_theme_color,
+        location: editFormData.location,
+        contact_email: editFormData.contact_email,
+        contact_phone: editFormData.contact_phone,
         pins: editFormData.pins,
       });
       toast.success('Restaurant updated successfully!');
@@ -445,9 +683,19 @@ export default function AgencyDashboard() {
 
   const handleSaveAgencyLogo = async (e) => {
     e.preventDefault();
+    if (whatsappNumber && !/^\d{10}$/.test(whatsappNumber.trim())) {
+      toast.error('WhatsApp number must be exactly 10 digits.');
+      return;
+    }
     try {
       setSavingSettings(true);
-      await agencyApi.put('/agency/settings', { logo_url: logoUrl, agency_name: agencyName, agency_url: agencyUrl });
+      await agencyApi.put('/agency/settings', { 
+        logo_url: logoUrl, 
+        agency_name: agencyName, 
+        agency_url: agencyUrl,
+        whatsapp_number: whatsappNumber.trim(),
+        social_links: socialLinks
+      });
       toast.success('Agency settings saved successfully!');
     } catch (err) {
       console.error(err);
@@ -525,8 +773,11 @@ export default function AgencyDashboard() {
       description: res.description || '',
       logout_redirect_url: res.logout_redirect_url || '',
       login_theme_color: res.login_theme_color || '#fafaf9',
+      location: res.location || '',
+      contact_email: res.contact_email || '',
+      contact_phone: res.contact_phone || '',
       pins: {
-        admin: res.pins?.admin || '1111',
+        admin: res.pins?.admin || 'admin123',
         waiter: res.pins?.waiter || '2222',
         counter: res.pins?.counter || '3333',
         cashier: res.pins?.cashier || '4444',
@@ -552,6 +803,7 @@ export default function AgencyDashboard() {
       description: '',
       logout_redirect_url: '',
       login_theme_color: '#fafaf9',
+      location: '',
       pins: {
         admin: '1111',
         waiter: '2222',
@@ -644,6 +896,22 @@ export default function AgencyDashboard() {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('applications')}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === 'applications'
+              ? 'bg-blue-600 text-white shadow-sm font-bold'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          Job Applications
+          {applications.length > 0 && (
+            <span className="ml-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              {applications.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('settings')}
           className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
             activeTab === 'settings'
@@ -653,6 +921,17 @@ export default function AgencyDashboard() {
         >
           <Settings className="w-3.5 h-3.5" />
           Settings
+        </button>
+        <button
+          onClick={() => setActiveTab('blog')}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === 'blog'
+              ? 'bg-blue-600 text-white shadow-sm font-bold'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+          }`}
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+          Blog Manager
         </button>
       </div>
 
@@ -765,9 +1044,37 @@ export default function AgencyDashboard() {
       </div>
 
       {/* Restaurants List */}
-      <h2 className="text-lg font-bold font-display text-slate-805 mb-4 flex items-center gap-2">
-        Registered SaaS Tenants
-      </h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h2 className="text-lg font-bold font-display text-slate-805 flex items-center gap-2">
+          Registered SaaS Tenants
+        </h2>
+
+        {/* Search and Filter Inputs */}
+        {restaurants.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3 items-center w-full md:w-auto">
+            <div className="relative w-full sm:w-60">
+              <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+              <input
+                type="text"
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
+                placeholder="Search by name..."
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+              />
+            </div>
+            <div className="relative w-full sm:w-60">
+              <MapPin className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+              <input
+                type="text"
+                value={filterLocation}
+                onChange={(e) => setFilterLocation(e.target.value)}
+                placeholder="Filter by location..."
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+              />
+            </div>
+          </div>
+        )}
+      </div>
       
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -781,9 +1088,15 @@ export default function AgencyDashboard() {
           <p className="text-base font-semibold text-slate-600">No Restaurants Registered Yet</p>
           <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Click "Add Restaurant" to spin up a new isolated service and database instance.</p>
         </div>
+      ) : filteredRestaurants.length === 0 ? (
+        <div className="text-center py-20 bg-white border border-dashed border-slate-200 rounded-3xl text-slate-450 max-w-xl mx-auto shadow-xs">
+          <Search className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+          <p className="text-base font-semibold text-slate-600">No Match Found</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">No restaurants match your search query or location filter.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {restaurants.map((res) => {
+          {filteredRestaurants.map((res) => {
             const isOnline = res.online;
             return (
               <div
@@ -824,9 +1137,12 @@ export default function AgencyDashboard() {
                       <h3 className="text-lg font-bold font-display text-slate-800 tracking-tight truncate">
                         {res.name}
                       </h3>
-                      <span className="text-[10px] text-slate-400 font-mono tracking-wider block mt-0.5">
-                        Port assignment: {res.port}
-                      </span>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-400 font-mono tracking-wider">
+                        <span>Port: {res.port}</span>
+                        {res.location && (
+                          <span className="text-indigo-600 font-bold">📍 {res.location}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1006,11 +1322,81 @@ export default function AgencyDashboard() {
             </div>
           </div>
 
+          {/* Plan Category Breakdown */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-450 uppercase tracking-wider">Subscription Plans Breakdown</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.entries(getPlanBreakdown()).map(([planName, planStats]) => (
+                <div key={planName} className="bg-white border border-slate-200 p-5 rounded-3xl flex flex-col justify-between shadow-sm">
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded uppercase tracking-wider inline-block mb-2">{planName}</span>
+                    <div className="flex justify-between items-baseline mt-1">
+                      <span className="text-2xl font-extrabold text-slate-800 font-mono">{planStats.active + planStats.trial}</span>
+                      <span className="text-xs text-slate-400">({planStats.active} Active / {planStats.trial} Trial)</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-100 pt-3 mt-3 flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>MRR: ₹{planStats.mrr.toLocaleString('en-IN')}</span>
+                    <span className="text-emerald-600 font-bold">Collected: ₹{planStats.collected.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(getPlanBreakdown()).length === 0 && (
+                <div className="col-span-full py-6 text-center text-xs text-slate-400 bg-white border border-dashed border-slate-200 rounded-3xl shadow-sm">
+                  No subscriptions allocated yet.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Billing Search and Filters */}
+          <div className="bg-white border border-slate-200 p-5 rounded-3xl grid grid-cols-1 sm:grid-cols-4 gap-4 shadow-sm">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Search Restaurant</label>
+              <input
+                type="text"
+                value={billingSearchName}
+                onChange={(e) => setBillingSearchName(e.target.value)}
+                placeholder="Restaurant name..."
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Filter by Location</label>
+              <input
+                type="text"
+                value={billingFilterLocation}
+                onChange={(e) => setBillingFilterLocation(e.target.value)}
+                placeholder="Location..."
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Filter by Plan</label>
+              <input
+                type="text"
+                value={billingFilterPlan}
+                onChange={(e) => setBillingFilterPlan(e.target.value)}
+                placeholder="e.g. Bronze, Silver..."
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Filter by Date</label>
+              <input
+                type="date"
+                value={billingFilterDate}
+                onChange={(e) => setBillingFilterDate(e.target.value)}
+                className="w-full px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition-colors font-mono"
+              />
+            </div>
+          </div>
+
           {/* Subscriptions Table */}
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 font-display text-base">Subscription Plan Allocations</h3>
-              <p className="text-xs text-slate-400">Total Tenants: {restaurants.length}</p>
+              <p className="text-xs text-slate-400">Matching Tenants: {filteredBillingRestaurants.length} / {restaurants.length}</p>
             </div>
             
             <div className="overflow-x-auto">
@@ -1026,16 +1412,24 @@ export default function AgencyDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {restaurants.map((res) => {
-                    const sub = res.subscription || { planName: 'Bronze Plan', price: 999, billingCycle: 'Monthly', status: 'Trial' };
+                  {filteredBillingRestaurants.map((res) => {
+                    const subRaw = res.subscription || {};
+                    const sub = {
+                      planName: subRaw.planName || 'Bronze Plan',
+                      price: subRaw.price !== undefined ? subRaw.price : 999,
+                      billingCycle: subRaw.billingCycle || 'Monthly',
+                      status: subRaw.status || 'Trial',
+                      startDate: subRaw.startDate || 'N/A',
+                      nextBillingDate: subRaw.nextBillingDate || 'N/A',
+                    };
                     const statusColors = {
                       Active: 'bg-green-50 text-green-700 border-green-205',
                       Trial: 'bg-blue-50 text-blue-700 border-blue-205',
                       'Past Due': 'bg-amber-50 text-amber-700 border-amber-205',
-                      Suspended: 'bg-slate-100 text-slate-600 border-slate-250',
+                      Suspended: 'bg-slate-100 text-slate-606 border-slate-250',
                     };
                     const statusClass = statusColors[sub.status] || 'bg-slate-50 text-slate-650 border-slate-200';
-
+ 
                     return (
                       <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4">
@@ -1048,8 +1442,12 @@ export default function AgencyDashboard() {
                               </div>
                             )}
                             <div>
-                              <div className="font-bold text-slate-850">{res.name}</div>
+                              <div className="font-bold text-slate-850 flex items-center gap-1.5">
+                                <span>{res.name}</span>
+                                {res.location && <span className="text-[10px] text-slate-450 font-normal">📍 {res.location}</span>}
+                              </div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">{res.id}</div>
+                              {res.contact_email && <div className="text-[9px] text-slate-400 mt-0.5 font-mono">{res.contact_email}</div>}
                             </div>
                           </div>
                         </td>
@@ -1070,26 +1468,49 @@ export default function AgencyDashboard() {
                           <div className="mt-1 text-slate-400">Next Due: {sub.nextBillingDate || 'N/A'}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => handleSendInvoice(res)}
+                              className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-emerald-150 text-[10px]"
+                              title="Send invoice via email"
+                            >
+                              <Mail className="w-3 h-3" />
+                              <span>Inv</span>
+                            </button>
+                            <button
+                              onClick={() => handleSendReminder(res)}
+                              className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-amber-150 text-[10px]"
+                              title="Send payment reminder"
+                            >
+                              <Bell className="w-3 h-3" />
+                              <span>Remind</span>
+                            </button>
                             <button
                               onClick={() => handleStartEditSubscription(res)}
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-slate-200"
+                              className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-slate-200 text-[10px]"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>Plan</span>
                             </button>
                             <button
                               onClick={() => handleStartViewingPayments(res)}
-                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-blue-150"
+                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold flex items-center gap-1 transition-colors border border-blue-150 text-[10px]"
                             >
                               <History className="w-3.5 h-3.5" />
-                              <span>Payments</span>
+                              <span>Pay Log</span>
                             </button>
                           </div>
                         </td>
                       </tr>
                     );
                   })}
+                  {filteredBillingRestaurants.length === 0 && (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center text-slate-450 bg-slate-50/50">
+                        No restaurant matching your criteria found.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1190,6 +1611,46 @@ export default function AgencyDashboard() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                    Location / City (e.g. Delhi, Mumbai)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="e.g. Delhi NCR"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                      Contact Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_email: e.target.value }))}
+                      placeholder="owner@restaurant.com"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                      Contact Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.contact_phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                      placeholder="e.g. +91-9876543210"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
                     Default Table Count
                   </label>
                   <input
@@ -1266,64 +1727,19 @@ export default function AgencyDashboard() {
 
                 <div className="border-t border-slate-150 pt-4 mt-2">
                   <h4 className="text-xs font-bold text-slate-450 uppercase tracking-wider mb-3">
-                    Instance Role PIN Configurations
+                    Admin Login Credentials
                   </h4>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-slate-500 mb-1">Admin PIN</label>
-                      <input
-                        type="text"
-                        maxLength="4"
-                        pattern="[0-9]{4}"
-                        value={formData.pins.admin}
-                        onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, admin: e.target.value } }))}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-500 mb-1">Waiter PIN</label>
-                      <input
-                        type="text"
-                        maxLength="4"
-                        pattern="[0-9]{4}"
-                        value={formData.pins.waiter}
-                        onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, waiter: e.target.value } }))}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-500 mb-1">Counter PIN</label>
-                      <input
-                        type="text"
-                        maxLength="4"
-                        pattern="[0-9]{4}"
-                        value={formData.pins.counter}
-                        onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, counter: e.target.value } }))}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-500 mb-1">Cashier PIN</label>
-                      <input
-                        type="text"
-                        maxLength="4"
-                        pattern="[0-9]{4}"
-                        value={formData.pins.cashier}
-                        onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, cashier: e.target.value } }))}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-slate-505 mb-1">Customer Default PIN</label>
-                      <input
-                        type="text"
-                        maxLength="4"
-                        pattern="[0-9]{4}"
-                        value={formData.pins.customer}
-                        onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, customer: e.target.value } }))}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Initial Admin Password *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.pins.admin}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pins: { ...prev.pins, admin: e.target.value } }))}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-bold text-slate-850 text-base"
+                      placeholder="e.g. admin123"
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1">Set the initial alphanumeric password for logging in to the Restaurant Admin portal.</p>
                   </div>
                 </div>
 
@@ -1372,6 +1788,45 @@ export default function AgencyDashboard() {
                   onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                  Location / City (e.g. Delhi, Mumbai)
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.location}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                    Contact Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editFormData.contact_email}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, contact_email: e.target.value }))}
+                    placeholder="owner@restaurant.com"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-2">
+                    Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.contact_phone}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                    placeholder="e.g. +91-9876543210"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 transition-colors text-xs"
+                  />
+                </div>
               </div>
 
               <div>
@@ -1437,64 +1892,18 @@ export default function AgencyDashboard() {
 
               <div className="border-t border-slate-150 pt-4 mt-2">
                 <h4 className="text-xs font-bold text-slate-450 uppercase tracking-wider mb-3">
-                  Update PIN Credentials
+                  Admin Login Credentials
                 </h4>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <label className="block text-slate-500 mb-1">Admin PIN</label>
-                    <input
-                      type="text"
-                      maxLength="4"
-                      pattern="[0-9]{4}"
-                      value={editFormData.pins.admin}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, admin: e.target.value } }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-500 mb-1">Waiter PIN</label>
-                    <input
-                      type="text"
-                      maxLength="4"
-                      pattern="[0-9]{4}"
-                      value={editFormData.pins.waiter}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, waiter: e.target.value } }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-500 mb-1">Counter PIN</label>
-                    <input
-                      type="text"
-                      maxLength="4"
-                      pattern="[0-9]{4}"
-                      value={editFormData.pins.counter}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, counter: e.target.value } }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-500 mb-1">Cashier PIN</label>
-                    <input
-                      type="text"
-                      maxLength="4"
-                      pattern="[0-9]{4}"
-                      value={editFormData.pins.cashier}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, cashier: e.target.value } }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-slate-505 mb-1">Customer Default PIN</label>
-                    <input
-                      type="text"
-                      maxLength="4"
-                      pattern="[0-9]{4}"
-                      value={editFormData.pins.customer}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, customer: e.target.value } }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-center font-bold text-slate-850"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Admin Password *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.pins.admin}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, pins: { ...prev.pins, admin: e.target.value } }))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-bold text-slate-850 text-base"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">Set the alphanumeric password for logging in to the Restaurant Admin portal.</p>
                 </div>
               </div>
 
@@ -1797,7 +2206,15 @@ export default function AgencyDashboard() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-slate-100 mt-4">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors border border-blue-200 flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print History</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setViewingPayments(null)}
@@ -2064,6 +2481,434 @@ export default function AgencyDashboard() {
               </div>
             </form>
           </div>
+
+          {/* Agency Contact & Social Links */}
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 lg:col-span-2">
+            <h3 className="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-blue-500" /> Agency Contact & Social Links
+            </h3>
+            <form onSubmit={handleSaveAgencyLogo} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">WhatsApp Support Number (10 digits)</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 8299443154"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">This number will be linked on the "Chat with us" icons across the platform.</p>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Facebook Profile URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://facebook.com/yourpage"
+                    value={socialLinks.facebook || ''}
+                    onChange={(e) => setSocialLinks(p => ({ ...p, facebook: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Twitter / X Profile URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://twitter.com/yourpage"
+                    value={socialLinks.twitter || ''}
+                    onChange={(e) => setSocialLinks(p => ({ ...p, twitter: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Instagram Profile URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://instagram.com/yourpage"
+                    value={socialLinks.instagram || ''}
+                    onChange={(e) => setSocialLinks(p => ({ ...p, instagram: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">LinkedIn Page URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://linkedin.com/company/yourpage"
+                    value={socialLinks.linkedin || ''}
+                    onChange={(e) => setSocialLinks(p => ({ ...p, linkedin: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                </div>
+
+                <div className="pt-5 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Social & Contact Links'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BLOG MANAGER TAB ═══ */}
+      {activeTab === 'blog' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Blog Editor (Left Column) */}
+          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-5 pb-2 border-b border-slate-100">
+              <h3 className="font-display font-bold text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-blue-500" />
+                {editingBlog ? 'Edit Blog Post' : 'Create New Post'}
+              </h3>
+              {editingBlog && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingBlog(null);
+                    setBlogFormData({ title: '', summary: '', content: '', author: 'Bhoj360 Team', image_url: '' });
+                  }}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+            <form onSubmit={handleBlogSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Post Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. How Bhoj360 Speeds Up Table Service"
+                  value={blogFormData.title}
+                  onChange={(e) => setBlogFormData(p => ({ ...p, title: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Author</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Bhoj360 Team"
+                  value={blogFormData.author}
+                  onChange={(e) => setBlogFormData(p => ({ ...p, author: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Featured Image URL</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/..."
+                  value={blogFormData.image_url}
+                  onChange={(e) => setBlogFormData(p => ({ ...p, image_url: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Short Summary / Excerpt</label>
+                <textarea
+                  rows={3}
+                  placeholder="A brief overview of this post to show in listings..."
+                  value={blogFormData.summary}
+                  onChange={(e) => setBlogFormData(p => ({ ...p, summary: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Post Content (HTML Supported)</label>
+                <textarea
+                  rows={10}
+                  placeholder="<p>Write your article body here...</p>"
+                  value={blogFormData.content}
+                  onChange={(e) => setBlogFormData(p => ({ ...p, content: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-400 transition-colors font-mono"
+                />
+              </div>
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : editingBlog ? 'Update Post' : 'Publish Blog Post'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Published Blogs (Right Column) */}
+          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+            <h3 className="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <Building className="w-4 h-4 text-blue-500" /> Published Articles ({blogs.length})
+            </h3>
+            {loadingBlogs ? (
+              <div className="flex justify-center py-20 text-slate-400 text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              </div>
+            ) : blogs.length === 0 ? (
+              <div className="text-center py-20 border-2 border-dashed border-slate-100 rounded-2xl">
+                <p className="text-slate-400 text-xs">No blog posts found. Publish your first article!</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {blogs.map((blog) => (
+                  <div key={blog.id} className="p-4 border border-slate-100 rounded-2xl hover:border-slate-200 transition-all flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                    <div className="flex gap-4 items-center flex-1">
+                      {blog.image_url ? (
+                        <img src={blog.image_url} alt={blog.title} className="w-14 h-14 rounded-xl object-cover border border-slate-100" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center text-xs font-bold uppercase">
+                          B360
+                        </div>
+                      )}
+                      <div>
+                        <h4 className="font-semibold text-sm text-slate-900 line-clamp-1">{blog.title}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">By {blog.author} • {blog.published_at ? format(parseISO(blog.published_at), 'MMM dd, yyyy') : 'Draft'}</p>
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-1">{blog.summary || 'No excerpt available.'}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 self-end md:self-center">
+                      <button
+                        onClick={() => handleStartEditBlog(blog)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100"
+                        title="Edit Post"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBlog(blog.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50/50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                        title="Delete Post"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ JOB APPLICATIONS TAB ═══ */}
+      {activeTab === 'applications' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Applications list (Left Panel) */}
+          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+            <h3 className="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-blue-500" /> Incoming Job Applications ({applications.length})
+            </h3>
+            {loadingApplications ? (
+              <div className="flex justify-center py-20 text-slate-400 text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              </div>
+            ) : applications.length === 0 ? (
+              <div className="text-center py-20 border-2 border-dashed border-slate-100 rounded-2xl">
+                <p className="text-slate-400 text-xs">No job applications received yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {applications.map((app) => (
+                  <div 
+                    key={app.id} 
+                    onClick={() => setSelectedApplication(app)}
+                    className={`p-4 border rounded-2xl cursor-pointer transition-all flex justify-between items-center ${
+                      selectedApplication?.id === app.id 
+                        ? 'border-blue-500 bg-blue-50/20 shadow-xs' 
+                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/30'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-sm text-slate-900">{app.name}</h4>
+                        <span className="text-[9px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100 uppercase">
+                          {app.role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">Email: {app.email} | Phone: {app.phone}</p>
+                      <p className="text-[10px] text-slate-350 font-mono mt-1">Submitted: {format(parseISO(app.createdAt), 'MMM dd, yyyy h:mm a')}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteApplication(app.id);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50/50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                        title="Delete Application"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Application Detail Viewer (Right Panel) */}
+          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-3xl shadow-sm p-6 h-fit">
+            <h3 className="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <Eye className="w-4 h-4 text-blue-500" /> Application Details
+            </h3>
+            {!selectedApplication ? (
+              <div className="text-center py-20 text-slate-450 border border-dashed border-slate-100 rounded-2xl">
+                <Info className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                <p className="text-xs">Select an application from the list to view full candidate details and cover letter.</p>
+              </div>
+            ) : (
+              <div className="space-y-5 text-left">
+                <div>
+                  <h4 className="font-bold text-base text-slate-800">{selectedApplication.name}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{selectedApplication.id}</p>
+                </div>
+
+                <div className="space-y-3 border-t border-b border-slate-100 py-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-450">Position Applied:</span>
+                    <strong className="text-slate-805 uppercase">{selectedApplication.role}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-450">Email:</span>
+                    <a href={`mailto:${selectedApplication.email}`} className="text-blue-605 hover:underline">{selectedApplication.email}</a>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-450">Phone:</span>
+                    <a href={`tel:${selectedApplication.phone}`} className="text-slate-707 font-semibold">{selectedApplication.phone}</a>
+                  </div>
+                  {selectedApplication.resumeLink && (
+                    <div className="flex justify-between items-center text-xs pt-1">
+                      <span className="text-slate-450">CV/Resume Link:</span>
+                      <a 
+                        href={selectedApplication.resumeLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-605 hover:underline flex items-center gap-1"
+                      >
+                        Open Link <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Cover Letter / Candidate Notes</p>
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs text-slate-707 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+                    {selectedApplication.coverLetter || 'No cover letter submitted.'}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <a
+                    href={`mailto:${selectedApplication.email}?subject=Regarding%20your%20Bhoj360%20application%20for%20${encodeURIComponent(selectedApplication.role)}`}
+                    className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs text-center rounded-xl transition-all shadow-xs"
+                  >
+                    Reply by Email
+                  </a>
+                  <button
+                    onClick={() => handleDeleteApplication(selectedApplication.id)}
+                    className="px-3 py-2 bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-100 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SCOPED CSS PRINT LAYOUT */}
+      <style>{`
+        #print-payments-history {
+          display: none;
+        }
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #print-payments-history, #print-payments-history * {
+            visibility: visible;
+          }
+          #print-payments-history {
+            display: block !important;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: white !important;
+            color: black !important;
+            padding: 20px;
+          }
+        }
+      `}</style>
+
+      {/* Hidden print container for billing history */}
+      {viewingPayments && (
+        <div id="print-payments-history">
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <h1 style={{ margin: '0 0 5px 0', fontSize: '24px' }}>Subscription Payment History</h1>
+            <p style={{ margin: 0, fontSize: '14px', color: '#555' }}>
+              <strong>Restaurant:</strong> {viewingPayments.name} ({viewingPayments.id})
+            </p>
+            {viewingPayments.location && (
+              <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#555' }}>
+                <strong>Location:</strong> {viewingPayments.location}
+              </p>
+            )}
+            <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#777' }}>
+              Printed on {new Date().toLocaleDateString()}
+            </p>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid black', textAlign: 'left', fontWeight: 'bold' }}>
+                <th style={{ padding: '8px' }}>Payment ID</th>
+                <th style={{ padding: '8px' }}>Date</th>
+                <th style={{ padding: '8px' }}>Plan</th>
+                <th style={{ padding: '8px' }}>Method</th>
+                <th style={{ padding: '8px' }}>Txn Reference</th>
+                <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!viewingPayments.paymentHistory || viewingPayments.paymentHistory.length === 0) ? (
+                <tr>
+                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>
+                    No payments logged.
+                  </td>
+                </tr>
+              ) : (
+                [...viewingPayments.paymentHistory].reverse().map((pay) => (
+                  <tr key={pay.id} style={{ borderBottom: '1px solid #ddd' }}>
+                    <td style={{ padding: '8px', fontFamily: 'monospace' }}>{pay.id}</td>
+                    <td style={{ padding: '8px' }}>{pay.date}</td>
+                    <td style={{ padding: '8px' }}>{pay.planName}</td>
+                    <td style={{ padding: '8px' }}>{pay.method}</td>
+                    <td style={{ padding: '8px', fontFamily: 'monospace' }}>{pay.transactionId || 'N/A'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>
+                      ₹{pay.amount.toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       )}
 

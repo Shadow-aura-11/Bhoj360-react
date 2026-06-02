@@ -9,7 +9,10 @@ import {
   QrCode, 
   Settings,
   LogOut, 
-  X 
+  X,
+  Users,
+  Ticket,
+  Wallet
 } from 'lucide-react';
 
 export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
@@ -26,6 +29,10 @@ export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
     { label: 'Tables', path: `/r/${restaurantId}/admin/tables`, icon: Grid },
     { label: 'Reservations', path: `/r/${restaurantId}/admin/reservations`, icon: CalendarCheck },
     { label: 'Menu Manager', path: `/r/${restaurantId}/admin/menu`, icon: UtensilsCrossed },
+    { label: 'Staff Management', path: `/r/${restaurantId}/admin/staff`, icon: Users },
+    { label: 'Customers Directory', path: `/r/${restaurantId}/admin/customers`, icon: Users },
+    { label: 'Coupons & Discounts', path: `/r/${restaurantId}/admin/coupons`, icon: Ticket },
+    { label: 'Money Management', path: `/r/${restaurantId}/admin/money`, icon: Wallet },
     { label: 'Analytics', path: `/r/${restaurantId}/admin/analytics`, icon: BarChart3 },
     { label: 'Print QR Codes', path: `/r/${restaurantId}/admin/print-qr`, icon: QrCode },
     { label: 'Settings', path: `/r/${restaurantId}/admin/settings`, icon: Settings },

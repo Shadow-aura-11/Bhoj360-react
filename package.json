@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "npx concurrently \"node agency-core/index.js\" \"node gateway/index.js\" \"cd frontend && npx vite --port 5173\"",
     "build": "cd frontend && npx vite build",
-    "start": "node gateway/index.js"
+    "start": "node scripts/start.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

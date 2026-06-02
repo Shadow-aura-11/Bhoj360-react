@@ -50,6 +50,12 @@ try {
   db.exec("ALTER TABLE orders ADD COLUMN customer_phone TEXT;");
 } catch (e) {}
 try {
+  db.exec("ALTER TABLE orders ADD COLUMN settled_by TEXT DEFAULT 'System';");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE order_items ADD COLUMN is_addon INTEGER DEFAULT 0;");
+} catch (e) {}
+try {
   db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT;");
 } catch (e) {}
 try {
@@ -64,6 +70,66 @@ try {
 try {
   db.exec("ALTER TABLE orders ADD COLUMN customer_name TEXT;");
 } catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN waiter_name TEXT;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN cash_amount REAL DEFAULT 0;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN online_amount REAL DEFAULT 0;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN discount_amount REAL DEFAULT 0;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN coupon_code TEXT;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE orders ADD COLUMN whatsapp_sent INTEGER DEFAULT 0;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE menu_items ADD COLUMN sort_order INTEGER DEFAULT 0;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE order_items ADD COLUMN addons_json TEXT;");
+} catch (e) {}
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS staff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      pin TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+} catch (e) {}
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS menu_item_addons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      price REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+} catch (e) {}
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      discount_type TEXT NOT NULL,
+      value REAL NOT NULL,
+      min_order_amount REAL DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+} catch (e) {}
 
 function readConfig() {
   return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -75,14 +141,48 @@ function authMiddleware(requiredRole) {
   return (req, res, next) => {
     const role = req.headers['x-role'];
     const pin = req.headers['x-pin'];
+    const username = req.headers['x-username'];
     const config = readConfig();
 
     if (!role || !pin) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    if (config.pins[role] !== pin) {
-      return res.status(401).json({ error: 'Invalid PIN' });
+
+    let authenticated = false;
+
+    // 1. Check if matching role PIN fallback for configured legacy roles
+    if (config.pins[role] && config.pins[role] === pin.toString()) {
+      authenticated = true;
+    } 
+    // 2. Otherwise, check if user credentials exist in the staff table
+    else if (username) {
+      try {
+        const user = db.prepare('SELECT * FROM staff WHERE username = ? AND pin = ? AND role = ?').get(username.toString().trim(), pin.toString(), role);
+        if (user) {
+          authenticated = true;
+          req.staffName = user.name;
+        }
+      } catch (err) {
+        console.error('Error validating staff credentials in authMiddleware:', err);
+      }
+    } 
+    // 3. Fallback: check if any staff member matches this PIN and role (e.g. if username header is missing but credential PIN is unique)
+    else {
+      try {
+        const user = db.prepare('SELECT * FROM staff WHERE pin = ? AND role = ?').get(pin.toString(), role);
+        if (user) {
+          authenticated = true;
+          req.staffName = user.name;
+        }
+      } catch (err) {
+        console.error('Error validating staff PIN in authMiddleware:', err);
+      }
     }
+
+    if (!authenticated) {
+      return res.status(401).json({ error: 'Invalid PIN or credentials' });
+    }
+
     if (requiredRole === 'admin' && role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -179,6 +279,7 @@ app.get('/health', (req, res) => {
     description: config.description || '',
     logout_redirect_url: config.logout_redirect_url || '',
     login_theme_color: config.login_theme_color || '#fafaf9',
+    theme: config.qr_theme || 'classic',
     uptime: process.uptime(),
   });
 });
@@ -221,25 +322,110 @@ app.get('/manifest.json', (req, res) => {
 // ─── Auth ───────────────────────────────────────────────────
 
 app.post('/auth', (req, res) => {
-  const { role, pin } = req.body;
+  const { role, pin, username } = req.body;
   const config = readConfig();
 
-  if (!role || !pin) {
-    return res.status(400).json({ error: 'Role and PIN are required' });
+  // If logging in as admin (requires role: admin and pin/password)
+  if (role === 'admin') {
+    if (!pin) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    if (config.pins.admin !== pin.toString()) {
+      return res.status(401).json({ error: 'Invalid Admin Password' });
+    }
+    db.prepare('INSERT INTO sessions (role) VALUES (?)').run('admin');
+    return res.json({ role: 'admin', restaurantId: RESTAURANT_ID, name: config.name, staffName: 'Admin' });
   }
 
-  if (!config.pins[role]) {
-    return res.status(401).json({ error: 'Invalid role' });
+  // If logging in as staff member (requires username/number and pin/password)
+  if (username && pin) {
+    try {
+      const user = db.prepare('SELECT * FROM staff WHERE (username = ? OR name = ?) AND pin = ?').get(username.toString().trim(), username.toString().trim(), pin.toString());
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid Staff ID/Number or Password' });
+      }
+      db.prepare('INSERT INTO sessions (role) VALUES (?)').run(user.role);
+      return res.json({
+        role: user.role,
+        restaurantId: RESTAURANT_ID,
+        name: config.name,
+        staffName: user.name,
+        username: user.username,
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Authentication database error' });
+    }
   }
 
-  if (config.pins[role] !== pin) {
-    return res.status(401).json({ error: 'Invalid PIN' });
+  // Legacy role-based login fallback (e.g. customer seating or fallback PINS)
+  if (role && pin) {
+    if (role === 'customer') {
+      if (!config.pins[role]) {
+        return res.status(401).json({ error: 'Invalid role' });
+      }
+      if (config.pins[role] !== pin.toString()) {
+        return res.status(401).json({ error: 'Invalid Password' });
+      }
+      db.prepare('INSERT INTO sessions (role) VALUES (?)').run(role);
+      return res.json({ role, restaurantId: RESTAURANT_ID, name: config.name, staffName: role.toUpperCase() });
+    }
+    return res.status(401).json({ error: 'Global role login is disabled. Please log in with your Staff account.' });
   }
 
-  // Create session
-  db.prepare('INSERT INTO sessions (role) VALUES (?)').run(role);
+  return res.status(400).json({ error: 'Invalid login request' });
+});
 
-  res.json({ role, restaurantId: RESTAURANT_ID, name: config.name });
+// GET /staff — List all staff members [ADMIN]
+app.get('/staff', authMiddleware('admin'), (req, res) => {
+  try {
+    const staff = db.prepare('SELECT id, username, name, role, pin, created_at FROM staff ORDER BY role, name').all();
+    res.json(staff);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve staff list' });
+  }
+});
+
+// POST /staff — Add a new staff member [ADMIN]
+app.post('/staff', authMiddleware('admin'), (req, res) => {
+  const { username, name, role, pin } = req.body;
+  if (!username || !name || !role || !pin) {
+    return res.status(400).json({ error: 'Username, Name, Role, and PIN are required' });
+  }
+  if (!['waiter', 'counter', 'cashier'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+  if (pin.toString().length < 4) {
+    return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+  }
+
+  try {
+    const existing = db.prepare('SELECT id FROM staff WHERE username = ?').get(username.toString().trim());
+    if (existing) {
+      return res.status(409).json({ error: 'Staff ID/Number already exists' });
+    }
+
+    db.prepare('INSERT INTO staff (username, name, role, pin) VALUES (?, ?, ?, ?)').run(
+      username.toString().trim(),
+      name.trim(),
+      role,
+      pin.toString()
+    );
+    res.status(201).json({ message: 'Staff member added successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add staff member' });
+  }
+});
+
+// DELETE /staff/:id — Delete a staff member [ADMIN]
+app.delete('/staff/:id', authMiddleware('admin'), (req, res) => {
+  try {
+    db.prepare('DELETE FROM staff WHERE id = ?').run(req.params.id);
+    res.json({ message: 'Staff member deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete staff member' });
+  }
 });
 
 // GET /settings/pins — Get current role login PINs [ADMIN]
@@ -248,32 +434,32 @@ app.get('/settings/pins', authMiddleware('admin'), (req, res) => {
   res.json({ pins: config.pins });
 });
 
-// PUT /settings/pins — Update login credentials (PINs) for waiter, counter, cashier, admin [ADMIN]
+// PUT /settings/pins — Update login credentials (PINs/passwords) for waiter, counter, cashier, admin [ADMIN]
 app.put('/settings/pins', authMiddleware('admin'), (req, res) => {
   const { admin, waiter, counter, cashier } = req.body;
   const config = readConfig();
 
   if (admin !== undefined) {
     if (admin.toString().length < 4) {
-      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
     config.pins.admin = admin.toString();
   }
   if (waiter !== undefined) {
     if (waiter.toString().length < 4) {
-      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
     config.pins.waiter = waiter.toString();
   }
   if (counter !== undefined) {
     if (counter.toString().length < 4) {
-      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
     config.pins.counter = counter.toString();
   }
   if (cashier !== undefined) {
     if (cashier.toString().length < 4) {
-      return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
     config.pins.cashier = cashier.toString();
   }
@@ -296,6 +482,26 @@ app.put('/settings/pins', authMiddleware('admin'), (req, res) => {
   }
 
   res.json({ message: 'Login credentials updated successfully', pins: config.pins });
+});
+
+// GET /settings/printer — Get current printer configs [ADMIN]
+app.get('/settings/printer', authMiddleware('admin'), (req, res) => {
+  const config = readConfig();
+  res.json({ printer: config.printer || { enabled: false, size: '80mm' } });
+});
+
+// PUT /settings/printer — Update printer configs [ADMIN]
+app.put('/settings/printer', authMiddleware('admin'), (req, res) => {
+  const { enabled, size } = req.body;
+  const config = readConfig();
+
+  config.printer = {
+    enabled: !!enabled,
+    size: size === '58mm' ? '58mm' : '80mm'
+  };
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+  res.json({ message: 'Printer settings updated successfully', printer: config.printer });
 });
 
 // GET /customers — Retrieve customer records and total statistics [ADMIN]
@@ -431,15 +637,26 @@ app.post('/tables', authMiddleware('admin'), (req, res) => {
   res.status(201).json(table);
 });
 
-// PUT /tables/:id — Update table [ADMIN]
-app.put('/tables/:id', authMiddleware('admin'), (req, res) => {
+// PUT /tables/:id — Update table [ADMIN/STAFF]
+app.put('/tables/:id', authMiddleware('staff'), (req, res) => {
   const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
 
-  const { number, capacity, section } = req.body;
+  const role = req.role;
+  const { number, capacity, section, status } = req.body;
+
+  if (role !== 'admin') {
+    if (status) {
+      db.prepare('UPDATE tables SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+      const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
+      io.to('restaurant').emit('table:updated', { table: updated });
+      return res.json(updated);
+    }
+    return res.status(403).json({ error: 'Only admin can modify table details' });
+  }
 
   // Block number change if active order
-  if (number && number !== table.number) {
+  if (number && number.toString().toLowerCase() !== table.number.toString().toLowerCase()) {
     const activeOrder = db
       .prepare("SELECT id FROM orders WHERE table_id = ? AND status NOT IN ('paid', 'cancelled') LIMIT 1")
       .get(table.id);
@@ -448,13 +665,13 @@ app.put('/tables/:id', authMiddleware('admin'), (req, res) => {
     }
 
     // Check unique
-    const existing = db.prepare('SELECT id FROM tables WHERE number = ? AND id != ?').get(number, table.id);
+    const existing = db.prepare('SELECT id FROM tables WHERE LOWER(number) = LOWER(?) AND id != ?').get(number.toString(), table.id);
     if (existing) return res.status(409).json({ error: `Table ${number} already exists` });
   }
 
   db.prepare(
-    'UPDATE tables SET number = COALESCE(?, number), capacity = COALESCE(?, capacity), section = COALESCE(?, section), updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(number || null, capacity || null, section || null, req.params.id);
+    'UPDATE tables SET number = COALESCE(?, number), capacity = COALESCE(?, capacity), section = COALESCE(?, section), status = COALESCE(?, status), updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(number || null, capacity || null, section || null, status || null, req.params.id);
 
   const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
   io.to('restaurant').emit('table:updated', { table: updated });
@@ -574,9 +791,18 @@ app.get('/menu', (req, res) => {
     params.push(Number(req.query.available));
   }
 
-  query += ' ORDER BY category, name';
-  const items = db.prepare(query).all(...params);
-  res.json(items);
+  query += ' ORDER BY category, sort_order, name';
+  try {
+    const items = db.prepare(query).all(...params);
+    const enriched = items.map((item) => {
+      const addons = db.prepare('SELECT * FROM menu_item_addons WHERE menu_item_id = ?').all(item.id);
+      return { ...item, addons };
+    });
+    res.json(enriched);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve menu items' });
+  }
 });
 
 // GET /menu/categories — Distinct categories
@@ -598,12 +824,28 @@ app.get('/menu/public', (req, res) => {
   }
 
   const config = readConfig();
-  const items = db.prepare('SELECT * FROM menu_items WHERE available = 1 ORDER BY category, name').all();
-  res.json({
-    restaurant: { id: RESTAURANT_ID, name: config.name },
-    table: { id: tableRow.id, number: table, status: tableRow.status },
-    menu: items,
-  });
+  try {
+    const items = db.prepare('SELECT * FROM menu_items WHERE available = 1 ORDER BY category, sort_order, name').all();
+    const enriched = items.map((item) => {
+      const addons = db.prepare('SELECT * FROM menu_item_addons WHERE menu_item_id = ?').all(item.id);
+      return { ...item, addons };
+    });
+    res.json({
+      restaurant: {
+        id: RESTAURANT_ID,
+        name: config.name,
+        logo_url: config.logo_url || '',
+        google_review_url: config.google_review_url || '',
+        qr_theme: config.qr_theme || 'classic',
+        billing_gst: config.billing_gst || { gst_enabled: true, gst_percent: 5, service_charge_enabled: false }
+      },
+      table: { id: tableRow.id, number: table, status: tableRow.status },
+      menu: enriched,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load public menu' });
+  }
 });
 
 // GET /menu/:id — Single item
@@ -705,7 +947,17 @@ function getOrderWithItems(orderId) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) return null;
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-  return { ...order, items };
+  const parsedItems = items.map(item => {
+    if (item.addons_json) {
+      try {
+        return { ...item, addons: JSON.parse(item.addons_json) };
+      } catch (e) {
+        return { ...item, addons: [] };
+      }
+    }
+    return { ...item, addons: [] };
+  });
+  return { ...order, items: parsedItems };
 }
 
 function emitOrderUpdate(eventName, fullOrder) {
@@ -827,6 +1079,8 @@ app.post('/orders/self', (req, res) => {
     )
     .get(tableRow.id);
 
+  const orderExists = !!order;
+
   const addItems = db.transaction(() => {
     if (!order) {
       // Create new order
@@ -857,22 +1111,41 @@ app.post('/orders/self', (req, res) => {
       if (!menuItem) continue;
 
       const qty = item.quantity || 1;
+      let finalPrice = menuItem.price;
+      let addonsJson = null;
+
+      if (Array.isArray(item.addons) && item.addons.length > 0) {
+        addonsJson = JSON.stringify(item.addons);
+        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
+        finalPrice += addonsTotal;
+      }
+
       db.prepare(
-        'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(order.id, menuItem.id, menuItem.name, qty, menuItem.price, item.notes || null);
+        'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes, is_addon, addons_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(order.id, menuItem.id, menuItem.name, qty, finalPrice, item.notes || null, orderExists ? 1 : 0, addonsJson);
     }
 
     // Recalculate total
     const totalRow = db
       .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
       .get(order.id);
+    
+    const discAmount = order ? (order.discount_amount || 0) : 0;
+    const finalTotal = Math.max(0, (totalRow.total || 0) - discAmount);
+
     db.prepare('UPDATE orders SET total = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
-      totalRow.total || 0,
+      finalTotal,
       order.id
     );
   });
 
   addItems();
+
+  // Auto-print KOT on order placement
+  const config = readConfig();
+  if (config.printing?.auto_print?.on_kot_create) {
+    console.log(`[Printer] AUTO-PRINT KOT: New Customer Self-Order placed for Table ${tableRow.number}. Print KOT to ${config.printing?.hardware?.kot_device || 'Default'}`);
+  }
 
   const fullOrder = getOrderWithItems(order.id);
   updateTableStatus(tableRow.id);
@@ -890,7 +1163,7 @@ app.get('/orders/:id', (req, res) => {
 
 // POST /orders — Create order [STAFF]
 app.post('/orders', authMiddleware('staff'), (req, res) => {
-  const { table_id, table_number, type = 'dine-in', items, notes, customer_phone, customer_name } = req.body;
+  const { table_id, table_number, type = 'dine-in', items, notes, customer_phone, customer_name, waiter_name, discount_amount = 0, coupon_code } = req.body;
 
   if (!table_id) {
     return res.status(400).json({ error: 'table_id is required' });
@@ -905,9 +1178,9 @@ app.post('/orders', authMiddleware('staff'), (req, res) => {
     // Create order
     const result = db
       .prepare(
-        'INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, customer_name, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO orders (table_id, table_number, type, status, notes, customer_phone, customer_name, waiter_name, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(table_id, tblNumber, type, 'pending', notes || null, customer_phone || null, customer_name || null, 0);
+      .run(table_id, tblNumber, type, 'pending', notes || null, customer_phone || null, customer_name || null, waiter_name || null, 0);
 
     const orderId = result.lastInsertRowid;
 
@@ -918,17 +1191,32 @@ app.post('/orders', authMiddleware('staff'), (req, res) => {
         if (!menuItem) continue;
 
         const qty = item.quantity || 1;
+        let finalPrice = menuItem.price;
+        let addonsJson = null;
+
+        if (Array.isArray(item.addons) && item.addons.length > 0) {
+          addonsJson = JSON.stringify(item.addons);
+          const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
+          finalPrice += addonsTotal;
+        }
+
         db.prepare(
-          'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(orderId, menuItem.id, menuItem.name, qty, menuItem.price, item.notes || null);
+          'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes, addons_json) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(orderId, menuItem.id, menuItem.name, qty, finalPrice, item.notes || null, addonsJson);
       }
 
       // Calculate total
       const totalRow = db
         .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
         .get(orderId);
-      db.prepare('UPDATE orders SET total = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
-        totalRow.total || 0,
+      
+      const discAmt = parseFloat(discount_amount) || 0;
+      const finalTotal = Math.max(0, (totalRow.total || 0) - discAmt);
+
+      db.prepare('UPDATE orders SET total = ?, discount_amount = ?, coupon_code = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+        finalTotal,
+        discAmt,
+        coupon_code || null,
         orderId
       );
     }
@@ -940,6 +1228,12 @@ app.post('/orders', authMiddleware('staff'), (req, res) => {
 
   // Update table status
   updateTableStatus(table_id);
+
+  // Auto-print KOT on order placement
+  const config = readConfig();
+  if (config.printing?.auto_print?.on_kot_create) {
+    console.log(`[Printer] AUTO-PRINT KOT: New Staff Order placed for Table ${tblNumber} (Order #${orderId}). Print KOT to ${config.printing?.hardware?.kot_device || 'Default'}`);
+  }
 
   const fullOrder = getOrderWithItems(orderId);
   emitOrderUpdate('order:new', fullOrder);
@@ -1022,22 +1316,41 @@ app.post('/orders/:id/items', authMiddleware('staff'), (req, res) => {
       if (!menuItem) continue;
 
       const qty = item.quantity || 1;
+      let finalPrice = menuItem.price;
+      let addonsJson = null;
+
+      if (Array.isArray(item.addons) && item.addons.length > 0) {
+        addonsJson = JSON.stringify(item.addons);
+        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
+        finalPrice += addonsTotal;
+      }
+
       db.prepare(
-        'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(req.params.id, menuItem.id, menuItem.name, qty, menuItem.price, item.notes || null);
+        'INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, notes, is_addon, addons_json) VALUES (?, ?, ?, ?, ?, ?, 1, ?)'
+      ).run(req.params.id, menuItem.id, menuItem.name, qty, finalPrice, item.notes || null, addonsJson);
     }
 
     // Recalculate total
     const totalRow = db
       .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
       .get(req.params.id);
+    
+    const discAmount = order.discount_amount || 0;
+    const finalTotal = Math.max(0, (totalRow.total || 0) - discAmount);
+
     db.prepare('UPDATE orders SET total = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
-      totalRow.total || 0,
+      finalTotal,
       req.params.id
     );
   });
 
   addItems();
+
+  // Auto-print KOT on order item addition
+  const config = readConfig();
+  if (config.printing?.auto_print?.on_kot_create) {
+    console.log(`[Printer] AUTO-PRINT KOT: Added items to Order #${req.params.id}. Print KOT to ${config.printing?.hardware?.kot_device || 'Default'}`);
+  }
 
   const fullOrder = getOrderWithItems(Number(req.params.id));
   emitOrderUpdate('order:itemAdded', fullOrder);
@@ -1158,21 +1471,324 @@ app.post('/orders/:id/settle', authMiddleware('staff'), (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  const { payment_method } = req.body;
+  const { payment_method, cash_amount, online_amount, discount_amount, coupon_code } = req.body;
   if (!payment_method) return res.status(400).json({ error: 'Payment method is required' });
 
+  let cashAmt = 0;
+  let onlineAmt = 0;
+  let finalTotal = order.total;
+
+  // Recalculate or apply discount/coupon if passed during settlement
+  let discAmt = parseFloat(discount_amount) || 0;
+  if (discAmt > 0 || coupon_code) {
+    const itemsTotalRow = db
+      .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
+      .get(req.params.id);
+    const rawTotal = itemsTotalRow.total || 0;
+    
+    // Check if coupon is passed
+    if (coupon_code) {
+      const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND active = 1').get(coupon_code.trim().toUpperCase());
+      if (coupon && rawTotal >= coupon.min_order_amount) {
+        if (coupon.discount_type === 'percentage') {
+          discAmt = (coupon.value / 100) * rawTotal;
+        } else {
+          discAmt = coupon.value;
+        }
+      }
+    }
+    
+    finalTotal = Math.max(0, rawTotal - discAmt);
+    db.prepare('UPDATE orders SET total = ?, discount_amount = ?, coupon_code = ? WHERE id = ?').run(
+      finalTotal,
+      discAmt,
+      coupon_code || null,
+      req.params.id
+    );
+  }
+
+  if (payment_method === 'cash') {
+    cashAmt = finalTotal;
+    onlineAmt = 0;
+  } else if (payment_method === 'upi' || payment_method === 'online') {
+    cashAmt = 0;
+    onlineAmt = finalTotal;
+  } else if (payment_method === 'split') {
+    cashAmt = parseFloat(cash_amount) || 0;
+    onlineAmt = parseFloat(online_amount) || 0;
+
+    // Validate that split matches final total
+    if (Math.abs(cashAmt + onlineAmt - finalTotal) > 0.05) {
+      return res.status(400).json({
+        error: `Split amounts (Cash: ${cashAmt}, Online: ${onlineAmt}) must sum up to the total of ${finalTotal}`
+      });
+    }
+  } else {
+    return res.status(400).json({ error: 'Invalid payment method' });
+  }
+
+  const settledBy = req.staffName || 'System';
   db.prepare(
-    "UPDATE orders SET status = 'paid', payment_status = 'paid', payment_method = ?, settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-  ).run(payment_method, req.params.id);
+    "UPDATE orders SET status = 'paid', payment_status = 'paid', payment_method = ?, cash_amount = ?, online_amount = ?, settled_by = ?, settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).run(payment_method, cashAmt, onlineAmt, settledBy, req.params.id);
 
   if (order.table_id) {
     updateTableStatus(order.table_id);
+  }
+
+  // Auto-print receipt on settlement
+  const config = readConfig();
+  if (config.printing?.auto_print?.on_settlement) {
+    console.log(`[Printer] AUTO-PRINT BILL: Order #${req.params.id} settled via ${payment_method}. Total: INR ${finalTotal}. Printing bill preview...`);
   }
 
   const fullOrder = getOrderWithItems(Number(req.params.id));
   emitOrderUpdate('order:updated', fullOrder);
 
   res.json(fullOrder);
+});
+
+// POST /orders/:id/send-whatsapp — Simulate sending WhatsApp message with bill link/receipt details
+app.post('/orders/:id/send-whatsapp', (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+  if (!/^\d{10}$/.test(phone)) {
+    return res.status(400).json({ error: 'Customer phone number must be exactly 10 digits' });
+  }
+
+  // Update order's whatsapp_sent field
+  db.prepare('UPDATE orders SET whatsapp_sent = 1 WHERE id = ?').run(req.params.id);
+
+  console.log(`[WhatsApp Simulation] Sending bill for Order #${order.id} (Total: INR ${order.total}) to +91${phone}`);
+
+  res.json({ message: `Bill sent to +91-${phone} successfully via WhatsApp Simulation.` });
+});
+
+// GET /settings/config — Get entire configuration including general, billing, and printing configs [STAFF/ADMIN]
+app.get('/settings/config', authMiddleware('staff'), (req, res) => {
+  const config = readConfig();
+  res.json(config);
+});
+
+// PUT /settings/config — Update configuration including general, billing, and printing configs [ADMIN]
+app.put('/settings/config', authMiddleware('admin'), (req, res) => {
+  const config = readConfig();
+  const { name, contact_phone, contact_email, location, fssai_compliance, billing, printing, google_review_url, qr_theme, logo_url } = req.body;
+
+  if (name !== undefined) config.name = name;
+  if (contact_phone !== undefined) {
+    if (contact_phone && !/^\d{10}$/.test(contact_phone)) {
+      return res.status(400).json({ error: 'Customer/Contact phone number must be exactly 10 digits' });
+    }
+    config.contact_phone = contact_phone;
+  }
+  if (contact_email !== undefined) config.contact_email = contact_email;
+  if (location !== undefined) config.location = location;
+  if (fssai_compliance !== undefined) config.fssai_compliance = fssai_compliance;
+  if (billing !== undefined) config.billing = billing;
+  if (printing !== undefined) config.printing = printing;
+  if (google_review_url !== undefined) config.google_review_url = google_review_url;
+  if (qr_theme !== undefined) config.qr_theme = qr_theme;
+  if (logo_url !== undefined) config.logo_url = logo_url;
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+
+  // Also sync with registry.json if necessary
+  try {
+    const agencyRegistryPath = path.join(__dirname, '..', '..', 'agency-core', 'registry.json');
+    if (fs.existsSync(agencyRegistryPath)) {
+      const reg = JSON.parse(fs.readFileSync(agencyRegistryPath, 'utf8'));
+      const rIndex = reg.restaurants.findIndex(r => r.id === RESTAURANT_ID);
+      if (rIndex !== -1) {
+        reg.restaurants[rIndex].name = config.name || reg.restaurants[rIndex].name;
+        reg.restaurants[rIndex].contact_phone = config.contact_phone || reg.restaurants[rIndex].contact_phone;
+        reg.restaurants[rIndex].location = config.location || reg.restaurants[rIndex].location;
+        reg.restaurants[rIndex].contact_email = config.contact_email || reg.restaurants[rIndex].contact_email;
+        reg.restaurants[rIndex].logo_url = config.logo_url || reg.restaurants[rIndex].logo_url;
+        fs.writeFileSync(agencyRegistryPath, JSON.stringify(reg, null, 2), 'utf8');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to sync settings with agency registry:', e.message);
+  }
+
+  res.json({ message: 'Configuration updated successfully', config });
+});
+
+// GET /settings/upi-qr — Generates dynamic Base64 UPI QR code using the restaurant's UPI ID and details
+app.get('/settings/upi-qr', (req, res) => {
+  const config = readConfig();
+  const upiId = req.query.upi_id || config.billing?.upi_id;
+  const amount = req.query.amount;
+  const merchantName = config.name || 'Restaurant';
+
+  if (!upiId) {
+    return res.status(400).json({ error: 'UPI ID is not configured' });
+  }
+
+  // Construct UPI URI
+  const upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&cu=INR${amount ? `&am=${amount}` : ''}`;
+
+  QRCode.toDataURL(upiUrl, (err, url) => {
+    if (err) {
+      console.error('Failed to generate UPI QR:', err.message);
+      return res.status(500).json({ error: 'Failed to generate QR Code' });
+    }
+    res.json({ qr_base64: url, upi_url: upiUrl });
+  });
+});
+
+// GET /coupons — Get all coupons [STAFF/ADMIN/PUBLIC]
+app.get('/coupons', (req, res) => {
+  try {
+    const coupons = db.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all();
+    res.json(coupons);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /coupons — Create/Update a coupon [ADMIN]
+app.post('/coupons', authMiddleware('admin'), (req, res) => {
+  const { id, code, discount_type, value, min_order_amount, active } = req.body;
+  if (!code || !discount_type || value === undefined) {
+    return res.status(400).json({ error: 'code, discount_type, and value are required' });
+  }
+
+  try {
+    if (id) {
+      db.prepare(
+        'UPDATE coupons SET code = ?, discount_type = ?, value = ?, min_order_amount = ?, active = ? WHERE id = ?'
+      ).run(code.trim().toUpperCase(), discount_type, parseFloat(value), parseFloat(min_order_amount || 0), active ? 1 : 0, id);
+      res.json({ message: 'Coupon updated successfully' });
+    } else {
+      db.prepare(
+        'INSERT INTO coupons (code, discount_type, value, min_order_amount, active) VALUES (?, ?, ?, ?, ?)'
+      ).run(code.trim().toUpperCase(), discount_type, parseFloat(value), parseFloat(min_order_amount || 0), active !== undefined ? (active ? 1 : 0) : 1);
+      res.json({ message: 'Coupon created successfully' });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /coupons/:id — Delete coupon [ADMIN]
+app.delete('/coupons/:id', authMiddleware('admin'), (req, res) => {
+  try {
+    db.prepare('DELETE FROM coupons WHERE id = ?').run(req.params.id);
+    res.json({ message: 'Coupon deleted successfully' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /coupons/validate — Validate a coupon for a given order amount
+app.post('/coupons/validate', (req, res) => {
+  const { code, amount } = req.body;
+  if (!code) return res.status(400).json({ error: 'Coupon code is required' });
+  if (amount === undefined) return res.status(400).json({ error: 'Order amount is required' });
+
+  try {
+    const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND active = 1').get(code.trim().toUpperCase());
+    if (!coupon) {
+      return res.status(404).json({ valid: false, message: 'Invalid or expired coupon' });
+    }
+
+    const orderAmt = parseFloat(amount);
+    if (orderAmt < coupon.min_order_amount) {
+      return res.status(400).json({
+        valid: false,
+        message: `Minimum order amount of INR ${coupon.min_order_amount} is required to use this coupon`
+      });
+    }
+
+    let discount = 0;
+    if (coupon.discount_type === 'percentage') {
+      discount = (coupon.value / 100) * orderAmt;
+    } else {
+      discount = coupon.value;
+    }
+
+    // Discount cannot exceed total amount
+    discount = Math.min(discount, orderAmt);
+
+    res.json({
+      valid: true,
+      coupon,
+      discount_amount: discount
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /menu/:id/addons — Retrieve all add-ons for a specific menu item
+app.get('/menu/:id/addons', (req, res) => {
+  try {
+    const addons = db.prepare('SELECT * FROM menu_item_addons WHERE menu_item_id = ?').all(req.params.id);
+    res.json(addons);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /menu/:id/addons — Add/Update an add-on for a menu item [ADMIN]
+app.post('/menu/:id/addons', authMiddleware('admin'), (req, res) => {
+  const { id, name, price } = req.body;
+  if (!name || price === undefined) {
+    return res.status(400).json({ error: 'name and price are required' });
+  }
+
+  try {
+    if (id) {
+      db.prepare(
+        'UPDATE menu_item_addons SET name = ?, price = ? WHERE id = ? AND menu_item_id = ?'
+      ).run(name, parseFloat(price), id, req.params.id);
+      res.json({ message: 'Add-on updated successfully' });
+    } else {
+      db.prepare(
+        'INSERT INTO menu_item_addons (menu_item_id, name, price) VALUES (?, ?, ?)'
+      ).run(req.params.id, name, parseFloat(price));
+      res.json({ message: 'Add-on created successfully' });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /menu/:id/addons/:addonId — Delete an add-on [ADMIN]
+app.delete('/menu/:id/addons/:addonId', authMiddleware('admin'), (req, res) => {
+  try {
+    db.prepare('DELETE FROM menu_item_addons WHERE id = ? AND menu_item_id = ?').run(req.params.addonId, req.params.id);
+    res.json({ message: 'Add-on deleted successfully' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /menu/reorder — Takes an array of { id, sort_order } to re-arrange menu listing [ADMIN]
+app.put('/menu/reorder', authMiddleware('admin'), (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: 'items must be an array of { id, sort_order }' });
+  }
+
+  const updateSort = db.transaction(() => {
+    const stmt = db.prepare('UPDATE menu_items SET sort_order = ? WHERE id = ?');
+    for (const item of items) {
+      stmt.run(item.sort_order || 0, item.id);
+    }
+  });
+
+  try {
+    updateSort();
+    res.json({ message: 'Menu items re-ordered successfully' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1400,6 +2016,18 @@ app.get('/analytics/summary', (req, res) => {
     )
     .get();
 
+  const todayCashRevenue = db
+    .prepare(
+      "SELECT COALESCE(SUM(cash_amount), 0) as revenue FROM orders WHERE status = 'paid' AND DATE(created_at) = DATE('now', 'localtime')"
+    )
+    .get();
+
+  const todayOnlineRevenue = db
+    .prepare(
+      "SELECT COALESCE(SUM(online_amount), 0) as revenue FROM orders WHERE status = 'paid' AND DATE(created_at) = DATE('now', 'localtime')"
+    )
+    .get();
+
   const todayOrders = db
     .prepare(
       "SELECT COUNT(*) as count FROM orders WHERE DATE(created_at) = DATE('now', 'localtime') AND status != 'cancelled'"
@@ -1425,6 +2053,8 @@ app.get('/analytics/summary', (req, res) => {
 
   res.json({
     revenue: Math.round(todayRevenue.revenue * 100) / 100,
+    cashRevenue: Math.round(todayCashRevenue.revenue * 100) / 100,
+    onlineRevenue: Math.round(todayOnlineRevenue.revenue * 100) / 100,
     orderCount: todayOrders.count,
     avgOrderValue: Math.round(avgOrderValue.avg * 100) / 100,
     tableTurnover,
@@ -1440,7 +2070,7 @@ app.get('/analytics/revenue', (req, res) => {
 
   const rows = db
     .prepare(
-      `SELECT DATE(created_at) as date, COALESCE(SUM(total), 0) as revenue, COUNT(*) as orders
+      `SELECT DATE(created_at) as date, COALESCE(SUM(total), 0) as revenue, COALESCE(SUM(cash_amount), 0) as cash_revenue, COALESCE(SUM(online_amount), 0) as online_revenue, COUNT(*) as orders
        FROM orders
        WHERE status = 'paid' AND created_at >= DATE('now', 'localtime', '-${days} days')
        GROUP BY DATE(created_at)
@@ -1448,7 +2078,13 @@ app.get('/analytics/revenue', (req, res) => {
     )
     .all();
 
-  res.json(rows);
+  res.json(rows.map(row => ({
+    date: row.date,
+    revenue: Math.round(row.revenue * 100) / 100,
+    cash_revenue: Math.round(row.cash_revenue * 100) / 100,
+    online_revenue: Math.round(row.online_revenue * 100) / 100,
+    orders: row.orders
+  })));
 });
 
 // GET /analytics/popular — Top 5 most ordered items
@@ -1464,6 +2100,96 @@ app.get('/analytics/popular', (req, res) => {
     .all();
 
   res.json(items);
+});
+
+// GET /analytics/money — Money management collections breakdown [ADMIN]
+app.get('/analytics/money', authMiddleware('admin'), (req, res) => {
+  const { startDate, endDate } = req.query;
+  let query = "SELECT id, total, cash_amount, online_amount, payment_method, settled_by, settled_at, customer_name, customer_phone, table_number FROM orders WHERE status = 'paid'";
+  const params = [];
+
+  if (startDate) {
+    query += " AND DATE(settled_at) >= DATE(?)";
+    params.push(startDate);
+  }
+  if (endDate) {
+    query += " AND DATE(settled_at) <= DATE(?)";
+    params.push(endDate);
+  }
+
+  query += " ORDER BY settled_at DESC";
+
+  try {
+    const orders = db.prepare(query).all(...params);
+    
+    let totalCollected = 0;
+    let totalCash = 0;
+    let totalOnline = 0;
+    const staffAttribution = {};
+
+    orders.forEach(order => {
+      const total = order.total || 0;
+      const cash = order.cash_amount || 0;
+      const online = order.online_amount || 0;
+      const staff = order.settled_by || 'System';
+
+      totalCollected += total;
+      totalCash += cash;
+      totalOnline += online;
+
+      if (!staffAttribution[staff]) {
+        staffAttribution[staff] = { cash: 0, online: 0, total: 0, ordersCount: 0 };
+      }
+      staffAttribution[staff].cash += cash;
+      staffAttribution[staff].online += online;
+      staffAttribution[staff].total += total;
+      staffAttribution[staff].ordersCount += 1;
+    });
+
+    res.json({
+      orders,
+      totals: {
+        totalCollected,
+        totalCash,
+        totalOnline
+      },
+      staffAttribution
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve money analytics' });
+  }
+});
+
+// POST /orders/delete-history — Delete orders in date range [ADMIN/CASHIER]
+app.post('/orders/delete-history', authMiddleware('staff'), (req, res) => {
+  const role = req.role;
+  if (role !== 'admin' && role !== 'cashier') {
+    return res.status(403).json({ error: 'Admin or Cashier privilege required' });
+  }
+
+  const { startDate, endDate } = req.body;
+  if (!startDate || !endDate) {
+    return res.status(400).json({ error: 'startDate and endDate are required' });
+  }
+
+  try {
+    const ordersToDelete = db
+      .prepare("SELECT id FROM orders WHERE DATE(COALESCE(settled_at, updated_at, created_at)) >= DATE(?) AND DATE(COALESCE(settled_at, updated_at, created_at)) <= DATE(?)")
+      .all(startDate, endDate);
+    const orderIds = ordersToDelete.map(o => o.id);
+
+    if (orderIds.length > 0) {
+      const placeholders = orderIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM order_items WHERE order_id IN (${placeholders})`).run(...orderIds);
+      db.prepare(`DELETE FROM orders WHERE id IN (${placeholders})`).run(...orderIds);
+    }
+
+    res.json({ message: `Successfully deleted ${orderIds.length} orders in range [${startDate} - ${endDate}].` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete transaction history' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════

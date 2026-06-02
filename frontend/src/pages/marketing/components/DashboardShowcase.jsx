@@ -68,10 +68,10 @@ export default function DashboardShowcase() {
                   <span className="dot-green"></span>
                 </div>
                 <div className="browser-address">
-                  {activeTab === 'admin' && 'https://tableos.agency/outlet/3101/admin'}
-                  {activeTab === 'waiter' && 'https://tableos.agency/outlet/3101/waiter'}
-                  {activeTab === 'kitchen' && 'https://tableos.agency/outlet/3101/kitchen'}
-                  {activeTab === 'guest' && 'https://tableos.agency/r/outlet_3101/menu'}
+                  {activeTab === 'admin' && 'https://bhoj360.com/outlet/3101/admin'}
+                  {activeTab === 'waiter' && 'https://bhoj360.com/outlet/3101/waiter'}
+                  {activeTab === 'kitchen' && 'https://bhoj360.com/outlet/3101/kitchen'}
+                  {activeTab === 'guest' && 'https://bhoj360.com/r/outlet_3101/menu'}
                 </div>
                 <div className="w-12"></div>
               </div>
@@ -285,7 +285,7 @@ export default function DashboardShowcase() {
                           <span className="font-mono text-[var(--color-amber)]">$142.00</span>
                         </div>
                         <button className="w-full py-2 bg-[var(--color-amber)] hover:bg-amber-400 text-black font-bold text-xs rounded-lg transition-colors text-center">
-                          Submit Order to TableOS
+                          Submit Order to Bhoj360
                         </button>
                       </div>
 

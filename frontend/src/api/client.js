@@ -33,6 +33,9 @@ export function createApi(restaurantId) {
     if (session.role && session.restaurantId === restaurantId) {
       config.headers['x-role'] = session.role;
       config.headers['x-pin'] = session.pin;
+      if (session.username) {
+        config.headers['x-username'] = session.username;
+      }
     }
     return config;
   });

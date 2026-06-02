@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Shield, Utensils, ClipboardList, Users, ArrowLeft, ArrowRight, Download, Landmark } from 'lucide-react';
 import { createApi } from '../api/client';
 import toast from 'react-hot-toast';
-import PinPad from '../components/shared/PinPad';
 
 export default function Login() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState(null); // 'admin' | 'waiter' | 'counter' | 'cashier' | 'customer'
+  const [staffUsername, setStaffUsername] = useState('');
+  const [staffPin, setStaffPin] = useState('');
   const [restaurantName, setRestaurantName] = useState('Restaurant');
   const [logoUrl, setLogoUrl] = useState('');
   const [description, setDescription] = useState('');
@@ -108,20 +109,38 @@ export default function Login() {
     setShowInstallBtn(false);
   };
 
-  const handlePinSubmit = async (pin) => {
+  const handleStaffLogin = async (e) => {
+    e.preventDefault();
+    const isAd = selectedRole === 'admin';
+    const targetUsername = isAd ? 'admin' : staffUsername.trim();
+    if (!isAd && !targetUsername) {
+      toast.error('Please enter your Staff ID or Username');
+      return;
+    }
+    if (staffPin.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
+
     try {
       setLoading(true);
-      const { data } = await api.post('/auth', { role: selectedRole, pin });
-      
+      const payload = isAd
+        ? { role: 'admin', pin: staffPin }
+        : { username: targetUsername, pin: staffPin };
+
+      const { data } = await api.post('/auth', payload);
+
       // Save session
       sessionStorage.setItem('session', JSON.stringify({
         role: data.role,
         restaurantId,
-        pin,
+        pin: staffPin,
         name: data.name,
+        staffName: data.staffName || (isAd ? 'Admin' : data.role.toUpperCase()),
+        username: data.username || targetUsername,
       }));
 
-      toast.success(`Logged in as ${data.role}`);
+      toast.success(`Logged in as ${data.staffName || (isAd ? 'Admin' : data.role.toUpperCase())}`);
 
       // Redirect to correct dashboard
       if (data.role === 'admin') navigate(`/r/${restaurantId}/admin`);
@@ -133,7 +152,7 @@ export default function Login() {
       console.error(err);
       setShake(true);
       setTimeout(() => setShake(false), 500);
-      const errorMsg = err.response?.data?.error || 'Invalid PIN or credentials';
+      const errorMsg = err.response?.data?.error || 'Invalid credentials or password';
       toast.error(errorMsg);
     } finally {
       setLoading(false);
@@ -203,6 +222,8 @@ export default function Login() {
     setCustomerPhone('');
     setCustomerName('');
     setTableNumber('');
+    setStaffUsername('');
+    setStaffPin('');
   };
 
   return (
@@ -490,13 +511,52 @@ export default function Login() {
                   )}
                 </form>
               ) : (
-                /* PIN entry */
-                <div className={shake ? 'animate-bounce' : ''}>
-                  <PinPad
-                    onSubmit={handlePinSubmit}
-                    label={`Enter ${selectedRole} PIN`}
-                  />
-                </div>
+                /* Credentials login for admin/waiter/counter/cashier */
+                <form onSubmit={handleStaffLogin} className={`w-full space-y-4 animate-slide-up ${shake ? 'animate-bounce' : ''}`}>
+                  <div className="text-center mb-4">
+                    <span className="text-[10px] font-bold text-amber-750 uppercase tracking-wider block">
+                      {selectedRole.toUpperCase()} PORTAL LOGIN
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {selectedRole === 'admin' 
+                        ? 'Enter admin username and password to log in' 
+                        : `Enter your ${selectedRole} ID and password to log in`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        disabled={selectedRole === 'admin'}
+                        value={selectedRole === 'admin' ? 'admin' : staffUsername}
+                        onChange={(e) => setStaffUsername(e.target.value)}
+                        placeholder="Staff ID or Username"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-600 focus:bg-white text-center font-bold text-base placeholder:text-slate-350 disabled:opacity-75 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="password"
+                        required
+                        value={staffPin}
+                        onChange={(e) => setStaffPin(e.target.value)}
+                        placeholder="Password"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-600 focus:bg-white text-center font-mono font-bold text-xl tracking-widest placeholder:text-slate-350"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 bg-amber-600 hover:bg-amber-550 text-white rounded-xl font-semibold shadow-md shadow-amber-600/10 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                  >
+                    <span>{loading ? 'Logging in...' : 'Sign In'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
               )}
             </div>
           )}

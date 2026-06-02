@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Edit, Trash2, HelpCircle, UtensilsCrossed } from 'lucide-react';
+import { Plus, Edit, Trash2, HelpCircle, UtensilsCrossed, ArrowUp, ArrowDown, ListOrdered, RefreshCw } from 'lucide-react';
 import { createApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import DashboardShell from '../../components/Layout/DashboardShell';
@@ -33,6 +33,15 @@ export default function MenuManager() {
   const [editItem, setEditItem] = useState(null);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(null);
 
+  // Menu Reorder Modal states
+  const [reorderModalOpen, setReorderModalOpen] = useState(false);
+  const [reorderItems, setReorderItems] = useState([]);
+
+  // Food Add-ons states
+  const [addons, setAddons] = useState([]);
+  const [loadingAddons, setLoadingAddons] = useState(false);
+  const [newAddon, setNewAddon] = useState({ name: '', price: 0 });
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -60,6 +69,20 @@ export default function MenuManager() {
     }
   };
 
+  const fetchAddons = async (itemId) => {
+    if (!itemId) return;
+    try {
+      setLoadingAddons(true);
+      const { data } = await api.get(`/menu/${itemId}/addons`);
+      setAddons(data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load add-ons');
+    } finally {
+      setLoadingAddons(false);
+    }
+  };
+
   useEffect(() => {
     if (restaurantId) fetchMenu();
   }, [restaurantId]);
@@ -84,6 +107,7 @@ export default function MenuManager() {
         image_url: editItem.image_url || '',
       });
       setShowNewCategory(false);
+      fetchAddons(editItem.id);
     } else {
       setFormData({
         name: '',
@@ -95,8 +119,80 @@ export default function MenuManager() {
         image_url: '',
       });
       setShowNewCategory(false);
+      setAddons([]);
     }
   }, [editItem, modalOpen, categories]);
+
+  const handleAddAddon = async () => {
+    if (!newAddon.name.trim()) {
+      toast.error('Add-on name is required');
+      return;
+    }
+    try {
+      await api.post(`/menu/${editItem.id}/addons`, {
+        name: newAddon.name.trim(),
+        price: parseFloat(newAddon.price) || 0
+      });
+      toast.success('Add-on added successfully!');
+      setNewAddon({ name: '', price: 0 });
+      fetchAddons(editItem.id);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to add add-on');
+    }
+  };
+
+  const handleDeleteAddon = async (addonId) => {
+    try {
+      await api.delete(`/menu/${editItem.id}/addons/${addonId}`);
+      toast.success('Add-on deleted successfully');
+      fetchAddons(editItem.id);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete add-on');
+    }
+  };
+
+  const handleOpenReorder = () => {
+    // Make copy of menuItems sorted by categories
+    setReorderItems(JSON.parse(JSON.stringify(menuItems)));
+    setReorderModalOpen(true);
+  };
+
+  const handleMoveItem = (index, direction) => {
+    const nextItems = [...reorderItems];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= nextItems.length) return;
+
+    // Only allow sorting within the same category to avoid category confusion
+    if (nextItems[index].category !== nextItems[targetIndex].category) {
+      toast.error('Sorting is only allowed within the same category!');
+      return;
+    }
+
+    const temp = nextItems[index];
+    nextItems[index] = nextItems[targetIndex];
+    nextItems[targetIndex] = temp;
+
+    setReorderItems(nextItems);
+  };
+
+  const handleSaveReorder = async () => {
+    try {
+      const itemsPayload = reorderItems.map((item, idx) => ({
+        id: item.id,
+        sort_order: idx
+      }));
+
+      await api.put('/menu/reorder', { items: itemsPayload });
+      toast.success('Menu order saved successfully!');
+      setReorderModalOpen(false);
+      fetchMenu();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save menu order');
+    }
+  };
 
   const handleToggleAvailable = async (item) => {
     try {
@@ -179,16 +275,25 @@ export default function MenuManager() {
             <UtensilsCrossed className="w-4.5 h-4.5 text-indigo-600" />
             Product Catalog
           </h2>
-          <button
-            onClick={() => {
-              setEditItem(null);
-              setModalOpen(true);
-            }}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-600/10 transition-all hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Menu Item</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleOpenReorder}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 border border-slate-200 transition-all shadow-xs"
+            >
+              <ListOrdered className="w-4 h-4 text-slate-500" />
+              <span>Rearrange Menu</span>
+            </button>
+            <button
+              onClick={() => {
+                setEditItem(null);
+                setModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-600/10 transition-all hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Menu Item</span>
+            </button>
+          </div>
         </div>
 
         {/* Menu grid container */}
@@ -216,7 +321,7 @@ export default function MenuManager() {
 
           <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 shadow-xl animate-slide-up flex flex-col max-h-[90vh] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4 shrink-0">
               <h3 className="text-lg font-bold font-display text-slate-800">
                 {editItem ? `Edit Menu Item` : 'Add Menu Item'}
               </h3>
@@ -229,7 +334,7 @@ export default function MenuManager() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSave} className="space-y-4 overflow-y-auto pr-1">
+            <form onSubmit={handleSave} className="space-y-4 overflow-y-auto pr-1 flex-1 pb-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Item Name *</label>
                 <input
@@ -249,7 +354,7 @@ export default function MenuManager() {
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Ingredients, sizes, dietary information..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:border-indigo-500 transition-all text-sm placeholder:text-slate-350"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:border-indigo-500 transition-all text-sm placeholder:text-slate-355 resize-none"
                 />
               </div>
 
@@ -381,7 +486,7 @@ export default function MenuManager() {
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 mt-2">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">Item In Stock</span>
-                  <span className="text-[10px] text-slate-500 block">Guests can view and order this item</span>
+                  <span className="text-[10px] text-slate-505 block">Guests can view and order this item</span>
                 </div>
                 <button
                   type="button"
@@ -398,15 +503,81 @@ export default function MenuManager() {
                 </button>
               </div>
 
+              {/* FOOD ADD-ONS SECTION (Only shown when editing an existing item) */}
+              {editItem && (
+                <div className="border-t border-slate-200 pt-4 mt-3 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-1.5 h-3 bg-indigo-600 rounded-xs"></span>
+                    Item Add-ons / Modifiers
+                  </h4>
+
+                  {loadingAddons ? (
+                    <div className="flex justify-center py-4 text-slate-400">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {addons.length === 0 ? (
+                        <p className="text-[10px] text-slate-400 italic">No add-ons created yet for this item.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-1">
+                          {addons.map((addon) => (
+                            <div key={addon.id} className="flex justify-between items-center bg-slate-50 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                              <span>{addon.name}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-indigo-600">+₹{addon.price.toFixed(2)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAddon(addon.id)}
+                                  className="text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add Add-on inline form */}
+                      <div className="flex gap-2 items-center bg-slate-50 border border-dashed border-slate-200 p-2.5 rounded-xl mt-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. Extra Cheese"
+                          value={newAddon.name}
+                          onChange={(e) => setNewAddon(prev => ({ ...prev, name: e.target.value }))}
+                          className="w-1/2 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Price"
+                          value={newAddon.price || ''}
+                          onChange={(e) => setNewAddon(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                          className="w-1/4 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-center"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddAddon}
+                          className="w-1/4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1 shadow-sm transition-all"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Footer Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setModalOpen(false);
                     setEditItem(null);
                   }}
-                  className="px-4 py-2 text-sm font-semibold text-slate-550 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200"
+                  className="px-4 py-2 text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200"
                 >
                   Cancel
                 </button>
@@ -418,6 +589,110 @@ export default function MenuManager() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* REORDER / REARRANGE MODAL */}
+      {reorderModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setReorderModalOpen(false)} />
+
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 shadow-xl animate-slide-up flex flex-col max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4 shrink-0">
+              <div>
+                <h3 className="text-base font-bold font-display text-slate-800 flex items-center gap-1.5">
+                  <ListOrdered className="w-5 h-5 text-indigo-600" /> Rearrange Menu Sorting Order
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">Use the up and down arrows to sort items within their categories.</p>
+              </div>
+              <button
+                onClick={() => setReorderModalOpen(false)}
+                className="p-1.5 text-slate-450 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </div>
+
+            {/* Reorder items listing */}
+            <div className="overflow-y-auto pr-1 flex-1 space-y-4 pb-4">
+              {categories.map((category) => {
+                const categoryItems = reorderItems.filter(item => item.category === category);
+                return (
+                  <div key={category} className="space-y-2">
+                    <h4 className="text-xs font-bold text-indigo-600 bg-indigo-50/50 px-3 py-1.5 rounded-lg border border-indigo-100/50 uppercase tracking-wider">{category}</h4>
+                    <div className="space-y-1.5 pl-1">
+                      {categoryItems.map((item, index) => {
+                        // Find global index in reorderItems
+                        const globalIndex = reorderItems.findIndex(x => x.id === item.id);
+                        const isFirstInCategory = index === 0;
+                        const isLastInCategory = index === categoryItems.length - 1;
+
+                        return (
+                          <div key={item.id} className="flex justify-between items-center bg-white p-3 border border-slate-205 border-slate-200 hover:border-slate-300 rounded-xl shadow-xs transition-all">
+                            <div className="flex items-center gap-3">
+                              {item.image_url ? (
+                                <img src={item.image_url} alt={item.name} className="w-8 h-8 rounded-lg object-cover border border-slate-100" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center font-display font-black text-slate-400 text-xs uppercase">
+                                  {item.name.charAt(0)}
+                                </div>
+                              )}
+                              <span className="text-xs font-semibold text-slate-850">{item.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isFirstInCategory}
+                                onClick={() => handleMoveItem(globalIndex, -1)}
+                                className={`p-1.5 rounded-lg border transition-all ${
+                                  isFirstInCategory 
+                                    ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' 
+                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-900'
+                                }`}
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isLastInCategory}
+                                onClick={() => handleMoveItem(globalIndex, 1)}
+                                className={`p-1.5 rounded-lg border transition-all ${
+                                  isLastInCategory 
+                                    ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' 
+                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-900'
+                                }`}
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setReorderModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReorder}
+                className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <span>Save New Order</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

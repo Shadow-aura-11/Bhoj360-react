@@ -65,7 +65,7 @@ export default function DemoModal({ isOpen, onClose }) {
     {
       title: "Step 3: Waiter Dispatch Alert",
       role: "SERVER MONITOR",
-      desc: "Once marked cooked, TableOS alerts the waiter assigned to Table 4. Their mobile screen illuminates with visual routing guides and auditory alerts.",
+      desc: "Once marked cooked, Bhoj360 alerts the waiter assigned to Table 4. Their mobile screen illuminates with visual routing guides and auditory alerts.",
       mockup: (
         <div className="space-y-4 max-w-sm mx-auto bg-[#0e0e0e] border border-white/10 rounded-2xl p-5 shadow-2xl text-left">
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
