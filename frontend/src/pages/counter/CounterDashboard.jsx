@@ -81,6 +81,10 @@ export default function CounterDashboard() {
     }
   };
 
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [agencySettings, setAgencySettings] = useState({ logo_url: '' });
+  const [mobileTab, setMobileTab] = useState('pending'); // 'pending' | 'preparing' | 'ready'
+  const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
   const [printOrder, setPrintOrder] = useState(null);
 
   useEffect(() => {
