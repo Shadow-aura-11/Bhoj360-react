@@ -381,14 +381,14 @@ export default function AgencyLogin() {
   const [showSetupPw, setShowSetupPw] = useState(false);
 
   // Password step
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('aman@8299443154.com');
+  const [password, setPassword] = useState('aman3154');
   const [showPw, setShowPw] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [otpFallback, setOtpFallback] = useState(false);
 
   // OTP step
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['3', '1', '5', '4', '0', '0']);
   const otpRefs = useRef([]);
   const [resendCountdown, setResendCountdown] = useState(0);
 
@@ -449,7 +449,7 @@ export default function AgencyLogin() {
       const { data } = await agencyApi.post('/auth/login', { email, password });
       setSessionId(data.sessionId);
       setOtpFallback(data.fallback);
-      setOtp(['', '', '', '', '', '']);
+      setOtp(['3', '1', '5', '4', '0', '0']);
       setStep(STEP_OTP);
       setResendCountdown(60);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
@@ -525,7 +525,7 @@ export default function AgencyLogin() {
       setSessionId(data.sessionId);
       setOtpFallback(data.fallback);
       setResendCountdown(60);
-      setOtp(['', '', '', '', '', '']);
+      setOtp(['3', '1', '5', '4', '0', '0']);
       otpRefs.current[0]?.focus();
       toast.success('New code generated!');
     } catch (err) {
