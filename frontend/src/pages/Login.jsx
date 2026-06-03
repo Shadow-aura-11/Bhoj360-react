@@ -26,10 +26,12 @@ export default function Login() {
   // PWA Install properties
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   
   const api = createApi(restaurantId);
 
-  // Dynamic Manifest injection and PWA listeners
+  // 1. Dynamic Manifest injection
   useEffect(() => {
     if (restaurantId) {
       let manifestLink = document.getElementById('dynamic-manifest');
@@ -41,12 +43,30 @@ export default function Login() {
       }
       manifestLink.href = `/r/${restaurantId}/manifest.json`;
     }
+  }, [restaurantId]);
 
+  // 2. iOS and Standalone detection for showing install button on phones
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const ios = /iPhone|iPad|iPod/i.test(ua);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    setIsIOS(ios);
+    setIsStandalone(standalone);
+
+    // Show manual install guide box for mobile users if they aren't already running in standalone mode
+    if (/iPhone|iPad|iPod|Android/i.test(ua) && !standalone) {
+      setShowInstallBtn(true);
+    }
+  }, []);
+
+  // 3. Early native installation event prompt capture
+  useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstallBtn(true);
-      toast(`Install the app for ${restaurantName || 'this restaurant'} on your device for quick access! 📲`, {
+      const name = sessionStorage.getItem('restaurant_name') || 'this restaurant';
+      toast(`Install the app for ${name} on your device for quick access! 📲`, {
         duration: 8000,
         id: 'pwa-install-toast',
         style: {
@@ -61,14 +81,17 @@ export default function Login() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [restaurantId, restaurantName]);
+  }, []);
 
   // Load restaurant details on mount
   useEffect(() => {
     const loadRestaurantDetails = async () => {
       try {
         const { data } = await api.get('/health');
-        if (data.name) setRestaurantName(data.name);
+        if (data.name) {
+          setRestaurantName(data.name);
+          sessionStorage.setItem('restaurant_name', data.name);
+        }
         if (data.logo_url) setLogoUrl(data.logo_url);
         if (data.description) setDescription(data.description);
         if (data.login_theme_color) setThemeColor(data.login_theme_color);
@@ -101,12 +124,29 @@ export default function Login() {
   }, [themeColor]);
 
   const handleInstallApp = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`PWA installation outcome: ${outcome}`);
-    setDeferredPrompt(null);
-    setShowInstallBtn(false);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`PWA installation outcome: ${outcome}`);
+      setDeferredPrompt(null);
+      setShowInstallBtn(false);
+    } else if (isIOS) {
+      toast((t) => (
+        <span className="text-xs">
+          To install on iPhone/iPad:<br />
+          1. Tap the <strong>Share</strong> button (📤) at the bottom.<br />
+          2. Scroll down and tap <strong>Add to Home Screen</strong> (➕).
+        </span>
+      ), { duration: 10000, id: 'ios-install-toast' });
+    } else {
+      toast((t) => (
+        <span className="text-xs">
+          To install on Android:<br />
+          1. Tap the browser menu (three dots <strong>⋮</strong> at top right).<br />
+          2. Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.
+        </span>
+      ), { duration: 10000, id: 'android-install-toast' });
+    }
   };
 
   const handleStaffLogin = async (e) => {
