@@ -59,6 +59,7 @@ export default function WaiterDashboard() {
   const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
   const [restaurantConfig, setRestaurantConfig] = useState(null);
   const [printOrder, setPrintOrder] = useState(null);
+  const [showThermalPreview, setShowThermalPreview] = useState(false);
 
   // POS Settle states
   const [settleModalOpen, setSettleModalOpen] = useState(false);
@@ -102,16 +103,56 @@ export default function WaiterDashboard() {
     fetchRestaurantConfig();
   }, []);
 
+  const printWithDynamicHeight = (elementId, width) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      const originalDisplay = element.style.display;
+      const originalVisibility = element.style.visibility;
+      const originalPosition = element.style.position;
+      const originalWidth = element.style.width;
+
+      element.style.setProperty('display', 'block', 'important');
+      element.style.visibility = 'hidden';
+      element.style.position = 'absolute';
+      element.style.width = width;
+
+      const heightPx = element.offsetHeight;
+
+      element.style.display = originalDisplay;
+      element.style.visibility = originalVisibility;
+      element.style.position = originalPosition;
+      element.style.width = originalWidth;
+
+      const dynamicHeight = heightPx > 0 ? `${heightPx + 16}px` : 'auto';
+
+      let styleEl = document.getElementById('dynamic-print-page-size-style');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-print-page-size-style';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.innerHTML = `
+        @media print {
+          @page {
+            size: ${width} ${dynamicHeight} !important;
+            margin: 0 !important;
+          }
+        }
+      `;
+    }
+    window.print();
+  };
+
   // Trigger print when printOrder is set
   useEffect(() => {
     if (printOrder) {
       const timer = setTimeout(() => {
-        window.print();
+        printWithDynamicHeight('print-kot-section', printerSettings.size === '58mm' ? '58mm' : '80mm');
         setPrintOrder(null);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [printOrder]);
+  }, [printOrder, printerSettings.size]);
 
   // Beep Audio Utility
   const playBeep = () => {
@@ -398,7 +439,7 @@ export default function WaiterDashboard() {
 
       // Trigger automatic printing after a short delay
       setTimeout(() => {
-        window.print();
+        printWithDynamicHeight('print-kot-section', printerSettings.size === '58mm' ? '58mm' : '80mm');
       }, 500);
     } catch (err) {
       console.error(err);
@@ -465,7 +506,7 @@ export default function WaiterDashboard() {
 
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col font-body">
+    <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col font-body dashboard-root">
       {/* Top Header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-amber-200/60 bg-white/80 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
@@ -647,7 +688,7 @@ export default function WaiterDashboard() {
                           )}
                           <span className="text-xs font-semibold text-slate-700 mt-1 block">Status: {activeOrder.status.toUpperCase()}</span>
                         </div>
-                        <span className="text-lg font-bold font-mono text-emerald-600">₹{activeOrder.total}</span>
+                        <span className="text-lg font-bold font-mono text-emerald-600">₹{calculateTotalPayable(activeOrder, activeOrder.discount_amount || 0, restaurantConfig?.billing).toFixed(2)}</span>
                       </div>
 
                       {/* Items feed */}
@@ -945,7 +986,7 @@ export default function WaiterDashboard() {
                         )}
                         <span className="text-xs font-semibold text-slate-700 mt-1 block">Status: {tableActiveOrder.status.toUpperCase()}</span>
                       </div>
-                      <span className="text-lg font-bold font-mono text-emerald-600">₹{tableActiveOrder.total}</span>
+                      <span className="text-lg font-bold font-mono text-emerald-600">₹{calculateTotalPayable(tableActiveOrder, tableActiveOrder.discount_amount || 0, restaurantConfig?.billing).toFixed(2)}</span>
                     </div>
 
                     {/* Items feed */}
@@ -1381,23 +1422,31 @@ export default function WaiterDashboard() {
       {/* Scoped printer style sheets */}
       <style>{`
         @media print {
-          /* Hide everything except the print-kot-section */
-          body * {
-            visibility: hidden;
+          body, html, #root {
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
           }
-          #print-kot-section, #print-kot-section * {
-            visibility: visible;
+          .dashboard-root > *:not(#print-kot-section) {
+            display: none !important;
+          }
+          html, body {
+            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
           }
           #print-kot-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'};
-            margin: 0;
-            padding: 5px;
-            background: white;
-            color: black;
-            font-family: monospace;
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 5px !important;
+            background: white !important;
+            color: black !important;
+            font-family: monospace !important;
+            box-sizing: border-box !important;
           }
           @page {
             size: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} auto;
@@ -1424,6 +1473,9 @@ export default function WaiterDashboard() {
               {restaurantConfig?.printing?.bill_setting?.show_address && restaurantConfig?.location && (
                 <div className="text-center text-[9px] mb-2 font-mono">{restaurantConfig.location}</div>
               )}
+              {restaurantConfig?.printing?.bill_setting?.show_contact !== false && restaurantConfig?.contact_phone && (
+                <div className="text-center text-[9px] mb-2 font-mono">📞 {restaurantConfig.contact_phone}</div>
+              )}
               <div className="border-b border-black border-dashed mb-2"></div>
               
               <div className="flex justify-between text-[10px] font-mono mb-1">
@@ -1449,12 +1501,19 @@ export default function WaiterDashboard() {
               
               {/* Items List */}
               {printOrder.items?.map((item) => (
-                <div key={item.id} className="grid grid-cols-12 text-[10px] font-mono mb-1">
-                  <span className="col-span-6 truncate">
-                    {item.is_addon ? '(Add-on) ' : ''}{item.item_name}
-                  </span>
-                  <span className="col-span-2 text-right">x{item.quantity}</span>
-                  <span className="col-span-4 text-right">₹{item.price * item.quantity}</span>
+                <div key={item.id}>
+                  <div className="grid grid-cols-12 text-[10px] font-mono mb-0.5">
+                    <span className="col-span-6 truncate">
+                      {item.is_addon ? '(Add-on) ' : ''}{item.item_name}
+                    </span>
+                    <span className="col-span-2 text-right">x{item.quantity}</span>
+                    <span className="col-span-4 text-right">₹{item.price * item.quantity}</span>
+                  </div>
+                  {item.addons && item.addons.length > 0 && (
+                    <div className="pl-3 text-[8px] font-mono text-slate-600 mb-0.5">
+                      {item.addons.map((ad, ai) => <div key={ai}>+ {ad.name} ₹{(ad.price || 0).toFixed(2)}</div>)}
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -1591,6 +1650,11 @@ export default function WaiterDashboard() {
                             * Note: {item.notes}
                           </div>
                         )}
+                        {item.addons && item.addons.length > 0 && (
+                          <div className="text-[9px] pl-2 text-slate-600">
+                            {item.addons.map((ad, ai) => <div key={ai}>+ {ad.name}</div>)}
+                          </div>
+                        )}
                       </td>
                       <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
                     </tr>
@@ -1611,6 +1675,95 @@ export default function WaiterDashboard() {
           )}
         </div>
       )}
+
+      {/* Live Thermal Preview Modal */}
+      {showThermalPreview && printOrder && (() => {
+        const thermalWidth = printerSettings?.size === '58mm' ? '58mm' : '80mm';
+        const isNarrow = thermalWidth === '58mm';
+        const items = printOrder.items || [];
+        const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0) || printOrder.total || 0;
+        const discount = printOrder.discount_amount || 0;
+        const afterDiscount = subtotal - discount;
+        const gstEnabled = restaurantConfig?.billing?.gst_enabled;
+        const gstPercent = restaurantConfig?.billing?.gst_percentage || 0;
+        const gstAmt = gstEnabled ? (afterDiscount * gstPercent) / 100 : 0;
+        const scEnabled = restaurantConfig?.billing?.service_charge_enabled ?? true;
+        const scPercent = scEnabled ? (restaurantConfig?.billing?.service_charge_percentage || 0) : 0;
+        const scAmt = (afterDiscount * scPercent) / 100;
+        const grandTotal = afterDiscount + gstAmt + scAmt;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowThermalPreview(false)} />
+            <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 flex flex-col gap-4 max-h-[92vh] overflow-y-auto w-full max-w-md">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-lg text-slate-800">Live Thermal Preview</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Paper: {thermalWidth}</p>
+                </div>
+                <button onClick={() => setShowThermalPreview(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="mx-auto bg-[#fffef7] border-2 border-dashed border-slate-300 rounded-xl shadow-inner overflow-auto" style={{ width: isNarrow ? '220px' : '302px', maxWidth: '100%' }}>
+                <div style={{ fontFamily: 'monospace', fontSize: isNarrow ? '8.5px' : '10px', lineHeight: '1.5', padding: '10px', color: 'black' }}>
+                  {restaurantConfig?.printing?.bill_setting?.show_logo && restaurantConfig?.logo_url && (
+                    <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+                      <img src={restaurantConfig.logo_url} alt="Logo" style={{ width: '32px', height: '32px', margin: '0 auto', display: 'block' }} />
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: isNarrow ? '11px' : '13px', marginBottom: '2px', textTransform: 'uppercase' }}>{restaurantName}</div>
+                  {restaurantConfig?.printing?.bill_setting?.show_address !== false && restaurantConfig?.location && <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: '2px' }}>{restaurantConfig.location}</div>}
+                  {restaurantConfig?.printing?.bill_setting?.show_contact !== false && restaurantConfig?.contact_phone && <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: '2px' }}>📞 {restaurantConfig.contact_phone}</div>}
+                  {restaurantConfig?.fssai_compliance && <div style={{ textAlign: 'center', fontSize: '7px', marginBottom: '2px' }}>FSSAI: {restaurantConfig.fssai_compliance}</div>}
+                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}><span>Table: {printOrder.table_number || 'Takeaway'}</span><span>#{printOrder.id}</span></div>
+                  <div style={{ fontSize: '7px', color: '#666' }}>{new Date(printOrder.settled_at || printOrder.created_at).toLocaleString()}</div>
+                  {restaurantConfig?.printing?.bill_setting?.show_customer_info && printOrder.customer_phone && <div style={{ fontSize: '8px' }}>Cust: {printOrder.customer_phone}</div>}
+                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginBottom: '3px', borderBottom: '1px solid #aaa', paddingBottom: '2px' }}>
+                    <span style={{ width: '50%' }}>Item</span><span style={{ width: '15%', textAlign: 'center' }}>Qty</span><span style={{ width: '35%', textAlign: 'right' }}>Price</span>
+                  </div>
+                  {items.map((item, idx) => (
+                    <div key={idx}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ width: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.item_name}</span>
+                        <span style={{ width: '15%', textAlign: 'center' }}>{item.quantity}</span>
+                        <span style={{ width: '35%', textAlign: 'right' }}>₹{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                      {item.addons && item.addons.length > 0 && <div style={{ paddingLeft: '6px', fontSize: '7px', color: '#555' }}>{item.addons.map((ad, ai) => <div key={ai}>+ {ad.name} ₹{(ad.price || 0).toFixed(2)}</div>)}</div>}
+                    </div>
+                  ))}
+                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span></div>
+                  {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Discount</span><span>-₹{discount.toFixed(2)}</span></div>}
+                  {gstEnabled && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>GST ({gstPercent}%)</span><span>₹{gstAmt.toFixed(2)}</span></div>}
+                  {scPercent > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Svc Charge ({scPercent}%)</span><span>₹{scAmt.toFixed(2)}</span></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderTop: '1px dashed black', marginTop: '4px', paddingTop: '3px', fontSize: isNarrow ? '10px' : '12px' }}><span>TOTAL</span><span>₹{grandTotal.toFixed(2)}</span></div>
+                  {printOrder.payment_method && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginTop: '2px', fontStyle: 'italic' }}><span>Paid via:</span><span style={{ textTransform: 'uppercase' }}>{printOrder.payment_method}</span></div>}
+                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
+                  <div style={{ textAlign: 'center', fontSize: '8px' }}>{restaurantConfig?.printing?.bill_setting?.custom_footer || 'Thank you! Visit again.'}</div>
+                  <div style={{ textAlign: 'center', fontSize: '7px', color: '#888', marginTop: '2px' }}>Powered by Bhoj360</div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowThermalPreview(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl border border-slate-200">Close</button>
+                <button
+                  onClick={() => {
+                    setShowThermalPreview(false);
+                    setTimeout(() => {
+                      const el = document.getElementById('print-receipt-section');
+                      if (el) { const s = document.createElement('style'); s.textContent = `@media print { body > * { display: none !important; } #print-receipt-section { display: block !important; } }`; document.head.appendChild(s); window.print(); setTimeout(() => s.remove(), 1000); }
+                    }, 100);
+                  }}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-2xl shadow-md flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-4 h-4" /> Print
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

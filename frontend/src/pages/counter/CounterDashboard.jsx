@@ -57,12 +57,49 @@ export default function CounterDashboard() {
   useEffect(() => {
     if (printOrder) {
       const timer = setTimeout(() => {
+        const printWidth = printerSettings.size === '58mm' ? '58mm' : '80mm';
+        const element = document.getElementById('print-kot-section');
+        if (element) {
+          const originalDisplay = element.style.display;
+          const originalVisibility = element.style.visibility;
+          const originalPosition = element.style.position;
+          const originalWidth = element.style.width;
+
+          element.style.setProperty('display', 'block', 'important');
+          element.style.visibility = 'hidden';
+          element.style.position = 'absolute';
+          element.style.width = printWidth;
+
+          const heightPx = element.offsetHeight;
+
+          element.style.display = originalDisplay;
+          element.style.visibility = originalVisibility;
+          element.style.position = originalPosition;
+          element.style.width = originalWidth;
+
+          const dynamicHeight = heightPx > 0 ? `${heightPx + 16}px` : 'auto';
+
+          let styleEl = document.getElementById('dynamic-print-page-size-style');
+          if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'dynamic-print-page-size-style';
+            document.head.appendChild(styleEl);
+          }
+          styleEl.innerHTML = `
+            @media print {
+              @page {
+                size: ${printWidth} ${dynamicHeight} !important;
+                margin: 0 !important;
+              }
+            }
+          `;
+        }
         window.print();
         setPrintOrder(null);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [printOrder]);
+  }, [printOrder, printerSettings.size]);
 
   // Beep Audio Utility
   const playBeep = () => {
@@ -201,7 +238,7 @@ export default function CounterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-rose-50/20 text-slate-800 flex flex-col font-body">
+    <div className="min-h-screen bg-rose-50/20 text-slate-800 flex flex-col font-body dashboard-root">
       
       {/* Upper header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-rose-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 flex-shrink-0 shadow-sm">
@@ -430,23 +467,31 @@ export default function CounterDashboard() {
       {/* Printer Scoped CSS and Print Ticket Layout */}
       <style>{`
         @media print {
-          /* Hide everything except the print-kot-section */
-          body * {
-            visibility: hidden;
+          body, html, #root {
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
           }
-          #print-kot-section, #print-kot-section * {
-            visibility: visible;
+          .dashboard-root > *:not(#print-kot-section) {
+            display: none !important;
+          }
+          html, body {
+            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
           }
           #print-kot-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: ${printerSettings.size === '58mm' ? '58mm' : '80mm'};
-            margin: 0;
-            padding: 5px;
-            background: white;
-            color: black;
-            font-family: monospace;
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 5px !important;
+            background: white !important;
+            color: black !important;
+            font-family: monospace !important;
+            box-sizing: border-box !important;
           }
           @page {
             size: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} auto;
@@ -499,10 +544,16 @@ export default function CounterDashboard() {
                         * Note: {item.notes}
                       </div>
                     )}
+                    {item.addons && item.addons.length > 0 && (
+                      <div className="text-[9px] pl-2 text-slate-600">
+                        {item.addons.map((ad, ai) => <div key={ai}>+ {ad.name}</div>)}
+                      </div>
+                    )}
                   </td>
                   <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
                 </tr>
               ))}
+
             </tbody>
           </table>
 

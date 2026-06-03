@@ -128,24 +128,35 @@ export default function OrderCard({
       {!compact && order.items && order.items.length > 0 && (
         <div className="border-y border-slate-100 py-3 my-1 space-y-2">
           {order.items.map((item) => (
-            <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 font-medium text-slate-700">
-                  <span className="text-indigo-650 font-mono font-bold">x{item.quantity}</span>
-                  <span className="truncate">
-                    {item.is_addon ? <span className="text-rose-600 font-bold mr-1">(Add-on)</span> : ''}
-                    {item.item_name}
-                  </span>
+            <div key={item.id}>
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-medium text-slate-700">
+                    <span className="text-indigo-650 font-mono font-bold">x{item.quantity}</span>
+                    <span className="truncate">
+                      {item.is_addon ? <span className="text-rose-600 font-bold mr-1">(Add-on)</span> : ''}
+                      {item.item_name}
+                    </span>
+                  </div>
+                  {item.notes && (
+                    <p className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md mt-1 border border-amber-100 italic">
+                      Note: {item.notes}
+                    </p>
+                  )}
+                  {item.addons && item.addons.length > 0 && (
+                    <div className="mt-0.5 pl-2 space-y-0.5">
+                      {item.addons.map((ad, ai) => (
+                        <span key={ai} className="inline-block text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded mr-1 font-medium">
+                          + {ad.name} ₹{(ad.price || 0).toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {item.notes && (
-                  <p className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md mt-1 border border-amber-100 italic">
-                    Note: {item.notes}
-                  </p>
-                )}
+                <span className="text-slate-500 text-xs font-mono font-semibold">
+                  ₹{item.price * item.quantity}
+                </span>
               </div>
-              <span className="text-slate-500 text-xs font-mono font-semibold">
-                ₹{item.price * item.quantity}
-              </span>
             </div>
           ))}
         </div>

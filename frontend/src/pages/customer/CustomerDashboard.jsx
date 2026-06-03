@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Coffee, Clipboard, Compass, ArrowRight, Bell, Soup, Utensils, Award, History, Clock, X, RefreshCw, CreditCard, DollarSign, LogOut } from 'lucide-react';
+import { Coffee, Clipboard, Compass, ArrowRight, Bell, Soup, Utensils, Award, History, Clock, X, RefreshCw, CreditCard, DollarSign, LogOut, Filter } from 'lucide-react';
 import { createApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import StatusBadge from '../../components/shared/StatusBadge';
@@ -25,6 +25,7 @@ export default function CustomerDashboard() {
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('All');
+  const [showCategoryPopover, setShowCategoryPopover] = useState(false);
   
   const [activeOrder, setActiveOrder] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -74,15 +75,25 @@ export default function CustomerDashboard() {
     );
   };
 
-  const toggleCartItemAddon = (itemId, addon) => {
+  const updateCartItemAddonQty = (itemId, addon, delta) => {
     setCart((prev) =>
       prev.map((cartItem) => {
         if (cartItem.menu_item_id === itemId) {
           const currentAddons = cartItem.addons || [];
-          const exists = currentAddons.some((a) => a.id === addon.id);
-          const nextAddons = exists
-            ? currentAddons.filter((a) => a.id !== addon.id)
-            : [...currentAddons, addon];
+          const existingIndex = currentAddons.findIndex((a) => a.id === addon.id);
+          
+          let nextAddons = [...currentAddons];
+          if (existingIndex > -1) {
+            const currentQty = nextAddons[existingIndex].quantity || 1;
+            const nextQty = currentQty + delta;
+            if (nextQty <= 0) {
+              nextAddons.splice(existingIndex, 1);
+            } else {
+              nextAddons[existingIndex] = { ...nextAddons[existingIndex], quantity: nextQty };
+            }
+          } else if (delta > 0) {
+            nextAddons.push({ ...addon, quantity: 1 });
+          }
           return { ...cartItem, addons: nextAddons };
         }
         return cartItem;
@@ -96,10 +107,46 @@ export default function CustomerDashboard() {
       toast.error('Your cart is empty');
       return;
     }
+    
+    const processedItems = [];
+    for (const item of cart) {
+      // 1. Flatten the addons list according to each addon's quantity
+      const flattenedAddons = [];
+      for (const ad of item.addons || []) {
+        const qty = ad.quantity || 1;
+        for (let i = 0; i < qty; i++) {
+          flattenedAddons.push({
+            id: ad.id,
+            name: ad.name,
+            price: ad.price
+          });
+        }
+      }
+
+      // 2. Split item if quantity > 1 and it has addons
+      if (item.quantity > 1 && flattenedAddons.length > 0) {
+        processedItems.push({
+          ...item,
+          quantity: 1,
+          addons: flattenedAddons
+        });
+        processedItems.push({
+          ...item,
+          quantity: item.quantity - 1,
+          addons: [],
+        });
+      } else {
+        processedItems.push({
+          ...item,
+          addons: flattenedAddons
+        });
+      }
+    }
+
     try {
       setLoading(true);
       await api.post('/orders/self', {
-        items: cart,
+        items: processedItems,
         notes: notes,
         customer_phone: session.customerPhone,
         customer_name: session.customerName || '',
@@ -472,6 +519,8 @@ export default function CustomerDashboard() {
     }
   };
 
+  const style = themeStyles[theme] || themeStyles.classic;
+
   const getCustomerCalculatedTotal = () => {
     if (!activeOrder) return { subtotal: 0, discount: 0, taxableAmount: 0, gstAmount: 0, serviceChargeAmount: 0, grandTotal: 0 };
     const subtotal = activeOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || activeOrder.total || 0;
@@ -590,7 +639,7 @@ export default function CustomerDashboard() {
         {/* Menu Tab */}
         {activeTab === 'menu' && (
           <div className="space-y-6">
-            <div className="flex gap-2 overflow-x-auto pb-2 scroll-smooth no-print">
+            <div className="hidden gap-2 overflow-x-auto pb-2 scroll-smooth no-print">
               {categories.map((c) => (
                 <button
                   key={c}
@@ -739,7 +788,7 @@ export default function CustomerDashboard() {
                           placeholder="Instructions (e.g., extra spicy...)"
                           className="flex-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-650 focus:outline-none"
                         />
-                        <span className="text-xs font-mono font-bold text-slate-700 font-mono">₹{(item.price + (item.addons || []).reduce((s, ad) => s + ad.price, 0)) * item.quantity}</span>
+                        <span className="text-xs font-mono font-bold text-slate-700 font-mono">₹{(item.price * item.quantity) + (item.addons || []).reduce((s, ad) => s + ad.price * (ad.quantity || 1), 0)}</span>
                       </div>
                       
                       {(() => {
@@ -751,20 +800,35 @@ export default function CustomerDashboard() {
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Add-ons:</span>
                             <div className="flex flex-col gap-1.5">
                               {availableAddons.map((ad) => {
-                                const isSelected = (item.addons || []).some((a) => a.id === ad.id);
+                                const selectedAddon = (item.addons || []).find((a) => a.id === ad.id);
+                                const qty = selectedAddon ? (selectedAddon.quantity || 1) : 0;
                                 return (
-                                  <label key={ad.id} className="flex items-center justify-between text-xs text-slate-650 cursor-pointer select-none">
-                                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                                      <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => toggleCartItemAddon(item.menu_item_id, ad)}
-                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
-                                      />
+                                  <div key={ad.id} className="flex items-center justify-between text-xs text-slate-655 select-none">
+                                    <div className="font-semibold text-slate-700">
                                       <span>{ad.name}</span>
+                                      <span className="font-mono text-slate-400 font-bold ml-1.5">(+₹{ad.price})</span>
                                     </div>
-                                    <span className="font-mono text-slate-450 font-bold">+₹{ad.price}</span>
-                                  </label>
+                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateCartItemAddonQty(item.menu_item_id, ad, -1)}
+                                        className="w-5 h-5 rounded bg-white flex items-center justify-center text-[10px] font-bold text-slate-500 hover:bg-slate-50"
+                                        disabled={qty === 0}
+                                      >
+                                        -
+                                      </button>
+                                      <span className="text-[10px] font-mono font-bold text-slate-700 px-1 min-w-4 text-center">
+                                        {qty}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateCartItemAddonQty(item.menu_item_id, ad, 1)}
+                                        className="w-5 h-5 rounded bg-white flex items-center justify-center text-[10px] font-bold text-slate-500 hover:bg-slate-50"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -777,7 +841,7 @@ export default function CustomerDashboard() {
 
                 <div className="flex justify-between items-center pt-3 border-t border-slate-100 font-bold text-sm text-emerald-950">
                   <span className="text-slate-500 font-medium">Basket Total</span>
-                  <span className="text-base font-bold font-mono text-emerald-600">₹{cart.reduce((sum, i) => sum + (i.price + (i.addons || []).reduce((s, ad) => s + ad.price, 0)) * i.quantity, 0)}</span>
+                  <span className="text-base font-bold font-mono text-emerald-600">₹{cart.reduce((sum, i) => sum + (i.price * i.quantity) + (i.addons || []).reduce((s, ad) => s + ad.price * (ad.quantity || 1), 0), 0)}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -1007,7 +1071,7 @@ export default function CustomerDashboard() {
               <span className="text-[10px] text-emerald-450 font-bold block uppercase tracking-wider">
                 {cart.reduce((sum, i) => sum + i.quantity, 0)} {cart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? 'item' : 'items'} selected
               </span>
-              <span className="text-sm font-black font-mono">₹{cart.reduce((sum, i) => sum + (i.price + (i.addons || []).reduce((s, ad) => s + ad.price, 0)) * i.quantity, 0)}</span>
+              <span className="text-sm font-black font-mono">₹{cart.reduce((sum, i) => sum + (i.price * i.quantity) + (i.addons || []).reduce((s, ad) => s + ad.price * (ad.quantity || 1), 0), 0)}</span>
             </div>
             <button
               onClick={() => setActiveTab('order')}
@@ -1052,6 +1116,49 @@ export default function CustomerDashboard() {
               </a>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Mobile Category FAB & Popover */}
+      {activeTab === 'menu' && (
+        <div className="fixed bottom-24 right-6 z-40">
+          {/* Category Popover */}
+          {showCategoryPopover && (
+            <div className="absolute bottom-14 right-0 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 w-48 space-y-1 animate-slide-up text-slate-805">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-2 mb-1">
+                Categories
+              </span>
+              <div className="max-h-60 overflow-y-auto space-y-1">
+                {categories.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCat(c);
+                      setShowCategoryPopover(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      selectedCat === c
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Action Button */}
+          <button
+            type="button"
+            onClick={() => setShowCategoryPopover(!showCategoryPopover)}
+            className="w-12 h-12 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+            style={{ backgroundColor: style.primary }}
+          >
+            {showCategoryPopover ? <X className="w-5 h-5" /> : <Filter className="w-5 h-5" />}
+          </button>
         </div>
       )}
 

@@ -62,6 +62,7 @@ export default function StaffSettings() {
         show_logo: true,
         show_address: true,
         show_customer_info: true,
+        show_contact: true,
         custom_footer: 'Thank you for dining with us!'
       },
       kot_setting: {
@@ -138,6 +139,7 @@ export default function StaffSettings() {
               show_logo: data.printing?.bill_setting?.show_logo ?? true,
               show_address: data.printing?.bill_setting?.show_address ?? true,
               show_customer_info: data.printing?.bill_setting?.show_customer_info ?? true,
+              show_contact: data.printing?.bill_setting?.show_contact ?? true,
               custom_footer: data.printing?.bill_setting?.custom_footer ?? 'Thank you for dining with us!',
             },
             kot_setting: {
@@ -765,6 +767,15 @@ export default function StaffSettings() {
                           className="rounded"
                         />
                         <span className="text-xs text-slate-700 font-semibold">Show Cust. Phone</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={config.printing.bill_setting.show_contact ?? true}
+                          onChange={(e) => setConfig(prev => ({ ...prev, printing: { ...prev.printing, bill_setting: { ...prev.printing.bill_setting, show_contact: e.target.checked } } }))}
+                          className="rounded"
+                        />
+                        <span className="text-xs text-slate-700 font-semibold">Show Rest. Phone</span>
                       </label>
                     </div>
 
