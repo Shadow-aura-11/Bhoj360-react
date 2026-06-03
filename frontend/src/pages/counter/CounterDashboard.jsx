@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock } from 'lucide-react';
+import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock, VolumeX } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -21,10 +21,66 @@ export default function CounterDashboard() {
   const { tables } = useTables(restaurantId, socket);
   const { orders, refreshOrders } = useOrders(restaurantId, socket);
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [agencySettings, setAgencySettings] = useState({ logo_url: '' });
-  const [mobileTab, setMobileTab] = useState('pending'); // 'pending' | 'preparing' | 'ready'
-  const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  const [speechEnabled, setSpeechEnabled] = useState(() => {
+    const saved = localStorage.getItem('kds_speech_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const toggleSpeech = () => {
+    setSpeechEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem('kds_speech_enabled', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const playLoudSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Beep 1
+      const osc1 = audioCtx.createOscillator();
+      const gainNode1 = audioCtx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode1.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      osc1.connect(gainNode1);
+      gainNode1.connect(audioCtx.destination);
+      osc1.start();
+      osc1.stop(audioCtx.currentTime + 0.12);
+      
+      // Beep 2
+      setTimeout(() => {
+        const osc2 = audioCtx.createOscillator();
+        const gainNode2 = audioCtx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        gainNode2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc2.connect(gainNode2);
+        gainNode2.connect(audioCtx.destination);
+        osc2.start();
+        osc2.stop(audioCtx.currentTime + 0.2);
+      }, 150);
+    } catch (e) {
+      console.warn('Audio failed:', e);
+    }
+  };
+
+  const speakText = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const [printOrder, setPrintOrder] = useState(null);
 
   useEffect(() => {
@@ -96,7 +152,10 @@ export default function CounterDashboard() {
     if (!socket) return;
 
     const handleNewOrder = (order) => {
-      playBeep();
+      playLoudSound();
+      if (speechEnabled) {
+        speakText(`New order received for Table ${order.table_number || order.table_id}`);
+      }
       toast(`New Order #${order.id} for Table ${order.table_number || order.table_id} Placed!`, {
         icon: '🔔',
         style: {
@@ -113,7 +172,10 @@ export default function CounterDashboard() {
     };
 
     const handleCallWaiter = ({ tableNumber }) => {
-      playBeep();
+      playLoudSound();
+      if (speechEnabled) {
+        speakText(`Table ${tableNumber} requests waiter assistance.`);
+      }
       toast(`Table ${tableNumber} requests assistance!`, {
         icon: '🆘',
         style: {
@@ -126,22 +188,30 @@ export default function CounterDashboard() {
     };
 
     const handleOrderUpdated = ({ order }) => {
-      refreshOrders();
-      if (order && order.payment_status === 'pending_payment') {
-        playBeep();
-        toast(`Table ${order.table_number || order.table_id} requested checkout via ${order.payment_method}!`, {
-          icon: '💰',
-          style: {
-            background: '#d97706',
-            color: '#ffffff',
-            fontWeight: 'bold',
-          },
-          duration: 5000,
-        });
+      if (order) {
+        const existingOrder = ordersRef.current.find((o) => o.id === order.id);
+        if (existingOrder && existingOrder.status !== order.status) {
+          const statusText = order.status === 'ready' ? 'ready' : order.status === 'preparing' ? 'preparing' : order.status === 'served' ? 'served' : order.status === 'paid' ? 'paid' : order.status;
+          const msg = `Table ${order.table_number || order.table_id} order is now ${statusText}.`;
+          playLoudSound();
+          if (speechEnabled) {
+            speakText(msg);
+          }
+        } else if (order.payment_status === 'pending_payment' && (!existingOrder || existingOrder.payment_status !== 'pending_payment')) {
+          playLoudSound();
+          if (speechEnabled) {
+            speakText(`Table ${order.table_number || order.table_id} requested checkout.`);
+          }
+        }
       }
+      refreshOrders();
     };
 
     const handleItemAdded = (order) => {
+      playLoudSound();
+      if (order && speechEnabled) {
+        speakText(`Items added to Table ${order.table_number || order.table_id} order.`);
+      }
       refreshOrders();
       if (printerSettings.enabled && order) {
         setPrintOrder(order);
@@ -159,7 +229,7 @@ export default function CounterDashboard() {
       socket.off('order:updated', handleOrderUpdated);
       socket.off('order:itemAdded', handleItemAdded);
     };
-  }, [socket, printerSettings.enabled]);
+  }, [socket, printerSettings.enabled, speechEnabled]);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     try {
@@ -235,6 +305,19 @@ export default function CounterDashboard() {
               {isConnected ? 'Linked' : 'Offline'}
             </span>
           </div>
+
+          <button
+            onClick={toggleSpeech}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl transition-all font-bold text-xs shadow-xs ${
+              speechEnabled
+                ? 'bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100'
+                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+            }`}
+            title={speechEnabled ? "Mute Speech Alerts" : "Enable Speech Alerts"}
+          >
+            {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span className="hidden sm:inline">{speechEnabled ? "Speech On" : "Speech Off"}</span>
+          </button>
 
           <button
             onClick={handleLogout}

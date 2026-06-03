@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw } from 'lucide-react';
+import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw, VolumeX } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -46,6 +46,24 @@ export default function WaiterDashboard() {
   const { tables, loading: tablesLoading, refreshTables } = useTables(restaurantId, socket);
   const { orders, refreshOrders } = useOrders(restaurantId, socket);
   const { reservations } = useReservations(restaurantId, socket);
+
+  const ordersRef = React.useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  const [speechEnabled, setSpeechEnabled] = useState(() => {
+    const saved = localStorage.getItem('waiter_speech_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const toggleSpeech = () => {
+    setSpeechEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem('waiter_speech_enabled', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const [selectedTable, setSelectedTable] = useState(null);
   const [waiterCalls, setWaiterCalls] = useState({}); // tableNumber -> boolean
@@ -289,24 +307,46 @@ export default function WaiterDashboard() {
     }
   };
 
-  // Beep Audio Utility
-  const playBeep = () => {
+  // Loud Beep Audio Utility
+  const playLoudSound = () => {
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
       
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      // Beep 1
+      const osc1 = audioCtx.createOscillator();
+      const gainNode1 = audioCtx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode1.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      osc1.connect(gainNode1);
+      gainNode1.connect(audioCtx.destination);
+      osc1.start();
+      osc1.stop(audioCtx.currentTime + 0.12);
       
-      osc.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.15);
+      // Beep 2
+      setTimeout(() => {
+        const osc2 = audioCtx.createOscillator();
+        const gainNode2 = audioCtx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        gainNode2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc2.connect(gainNode2);
+        gainNode2.connect(audioCtx.destination);
+        osc2.start();
+        osc2.stop(audioCtx.currentTime + 0.2);
+      }, 150);
     } catch (e) {
-      console.warn('Web Audio API blocked or not supported');
+      console.warn('Audio failed:', e);
+    }
+  };
+
+  const speakText = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -319,7 +359,10 @@ export default function WaiterDashboard() {
     const handleWaiterCall = ({ table, tableNumber }) => {
       const tblNum = table || tableNumber;
       if (!tblNum) return;
-      playBeep();
+      playLoudSound();
+      if (speechEnabled) {
+        speakText(`Table ${tblNum} is calling for attention.`);
+      }
       setWaiterCalls((prev) => ({ ...prev, [tblNum]: true }));
       setNotifications((prev) => [
         {
@@ -343,8 +386,18 @@ export default function WaiterDashboard() {
 
     const handleOrderUpdated = ({ order }) => {
       if (!order) return;
-      if (order.status === 'ready') {
-        playBeep();
+      
+      const existingOrder = ordersRef.current.find((o) => o.id === order.id);
+      if (existingOrder && existingOrder.status !== order.status) {
+        const statusText = order.status === 'ready' ? 'ready' : order.status === 'preparing' ? 'preparing' : order.status === 'served' ? 'served' : order.status === 'paid' ? 'paid' : order.status;
+        const msg = `Table ${order.table_number || order.table_id} order is now ${statusText}.`;
+        playLoudSound();
+        if (speechEnabled) {
+          speakText(msg);
+        }
+      }
+
+      if (order.status === 'ready' && (!existingOrder || existingOrder.status !== 'ready')) {
         toast.success(`Order #${order.id} for Table ${order.table_number} is READY!`, {
           icon: '🍳',
           duration: 6000,
@@ -354,15 +407,25 @@ export default function WaiterDashboard() {
       refreshTables();
     };
 
+    const handleNewOrder = (order) => {
+      playLoudSound();
+      if (order && speechEnabled) {
+        speakText(`New order placed for Table ${order.table_number || order.table_id}`);
+      }
+      refreshOrders();
+      refreshTables();
+    };
+
     socket.on('waiter:called', handleWaiterCall);
     socket.on('order:updated', handleOrderUpdated);
-    socket.on('order:new', () => { refreshOrders(); refreshTables(); });
+    socket.on('order:new', handleNewOrder);
 
     return () => {
       socket.off('waiter:called', handleWaiterCall);
       socket.off('order:updated', handleOrderUpdated);
+      socket.off('order:new', handleNewOrder);
     };
-  }, [socket]);
+  }, [socket, speechEnabled]);
 
   // Keep selected table updated with latest list details
   const activeTable = tables.find((t) => t.id === selectedTable?.id) || selectedTable;
@@ -486,6 +549,19 @@ export default function WaiterDashboard() {
               {isConnected ? 'Syncing' : 'No connection'}
             </span>
           </div>
+
+          <button
+            onClick={toggleSpeech}
+            className={`flex items-center gap-1.5 px-3 py-1 border rounded-xl transition-all font-bold text-xs shadow-xs ${
+              speechEnabled
+                ? 'bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100'
+                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+            }`}
+            title={speechEnabled ? "Mute Speech Alerts" : "Enable Speech Alerts"}
+          >
+            {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span className="hidden sm:inline">{speechEnabled ? "Speech On" : "Speech Off"}</span>
+          </button>
 
           <button
             onClick={handleLogout}
