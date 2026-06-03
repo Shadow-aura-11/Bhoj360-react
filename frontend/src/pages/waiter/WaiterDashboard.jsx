@@ -1166,18 +1166,59 @@ export default function WaiterDashboard() {
               </button>
             </div>
 
+            {/* Bill Items List */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-2.5xl text-xs space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Order Items Summary</span>
+              <div className="max-h-24 overflow-y-auto pr-1 divide-y divide-slate-100/50 space-y-1">
+                {orderToSettle.items?.map((item) => (
+                  <div key={item.id} className="flex justify-between py-1 first:pt-0">
+                    <span className="text-slate-600">
+                      {item.is_addon ? '(Add-on) ' : ''}{item.item_name} <span className="font-bold font-mono text-slate-405">x{item.quantity}</span>
+                    </span>
+                    <span className="font-mono text-slate-500">₹{item.price * item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Price Calculations */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold text-slate-500">
-                <span>Items Subtotal:</span>
-                <span className="font-mono">₹{orderToSettle.total}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-xs font-semibold text-emerald-600">
-                  <span>Coupon Discount:</span>
-                  <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
-                </div>
-              )}
+              {(() => {
+                const subtotal = orderToSettle.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || orderToSettle.total || 0;
+                const taxableAmount = Math.max(0, subtotal - discountAmount);
+                const gstEnabled = restaurantConfig?.billing?.gst_enabled;
+                const gstPercent = restaurantConfig?.billing?.gst_percentage || 0;
+                const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+                const serviceChargePercent = restaurantConfig?.billing?.service_charge_percentage || 0;
+                const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+
+                return (
+                  <div className="space-y-1.5 text-xs text-slate-500">
+                    <div className="flex justify-between">
+                      <span>Items Subtotal:</span>
+                      <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+                    </div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-emerald-600 font-semibold">
+                        <span>Coupon Discount:</span>
+                        <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {gstEnabled && (
+                      <div className="flex justify-between">
+                        <span>GST ({gstPercent}%):</span>
+                        <span className="font-mono">₹{gstAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {serviceChargePercent > 0 && (
+                      <div className="flex justify-between">
+                        <span>Service Charge ({serviceChargePercent}%):</span>
+                        <span className="font-mono">₹{serviceChargeAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <span className="text-xs text-slate-655 font-bold uppercase tracking-wider">Final Payable Total:</span>
                 <span className="text-2xl font-bold font-mono text-emerald-600">₹{finalPayableTotal.toFixed(2)}</span>

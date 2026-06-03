@@ -920,6 +920,21 @@ export default function CustomerDashboard() {
               </button>
             </div>
 
+            {/* Bill Items List */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-2.5xl text-xs space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Order Items Summary</span>
+              <div className="max-h-24 overflow-y-auto pr-1 divide-y divide-slate-100/50 space-y-1">
+                {activeOrder.items?.map((item) => (
+                  <div key={item.id} className="flex justify-between py-1 first:pt-0">
+                    <span className="text-slate-600">
+                      {item.is_addon ? '(Add-on) ' : ''}{item.item_name} <span className="font-bold font-mono text-slate-405">x{item.quantity}</span>
+                    </span>
+                    <span className="font-mono text-slate-500">₹{item.price * item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Bill Details Breakdown */}
             <div className="space-y-1.5 border-b border-slate-100 pb-3 text-xs text-slate-600">
               <div className="flex justify-between">
