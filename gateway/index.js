@@ -68,6 +68,13 @@ app.use('/r/:restaurantId/socket.io', (req, res, next) => {
     return res.status(503).json({ error: `Restaurant ${restaurantId} not found` });
   }
 
+  // Intercept if tenant is blocked (active is false)
+  const registry = readRegistry();
+  const entry = registry.restaurants.find((r) => r.id === restaurantId);
+  if (entry && entry.active === false) {
+    return res.status(403).json({ error: 'This restaurant portal has been suspended by the administrator.' });
+  }
+
   const proxy = createProxyMiddleware({
     target: `http://localhost:${port}`,
     changeOrigin: true,
@@ -97,6 +104,23 @@ app.use('/r/:restaurantId', (req, res, next) => {
 
   if (!port) {
     return res.status(503).json({ error: `Restaurant ${restaurantId} not found` });
+  }
+
+  // Intercept if tenant is blocked (active is false)
+  const registry = readRegistry();
+  const entry = registry.restaurants.find((r) => r.id === restaurantId);
+  if (entry && entry.active === false) {
+    const relativePath = req.path || '';
+    const apiRoots = ['/auth', '/tables', '/menu', '/orders', '/reservations', '/analytics', '/health', '/uploads', '/manifest.json', '/staff', '/settings', '/customers', '/coupons'];
+    const isApiRequest = apiRoots.some((root) => relativePath.startsWith(root));
+    const accept = req.headers.accept || '';
+
+    if (isApiRequest && !accept.includes('text/html')) {
+      return res.status(403).json({ 
+        error: 'This restaurant portal has been suspended by the administrator.', 
+        blocked: true 
+      });
+    }
   }
 
   // Bypass proxy for non-API routes or HTML document requests (page navigation) so the React SPA handles routing
@@ -195,6 +219,13 @@ server.on('upgrade', (req, socket, head) => {
     const port = findRestaurantPort(restaurantId);
 
     if (port) {
+      const registry = readRegistry();
+      const entry = registry.restaurants.find((r) => r.id === restaurantId);
+      if (entry && entry.active === false) {
+        socket.destroy();
+        return;
+      }
+
       const proxy = createProxyMiddleware({
         target: `http://localhost:${port}`,
         ws: true,

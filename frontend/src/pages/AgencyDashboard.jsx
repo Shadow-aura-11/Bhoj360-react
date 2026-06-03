@@ -620,19 +620,6 @@ export default function AgencyDashboard() {
   useEffect(() => {
     fetchRestaurants();
     fetchAgencySettings();
-  }, []);
-
-  // Fetch inquiries when tab switches to 'inquiries'
-  useEffect(() => {
-    if (activeTab === 'inquiries') {
-      fetchInquiries();
-    }
-    if (activeTab === 'blog') {
-      fetchBlogs();
-    }
-    if (activeTab === 'applications') {
-      fetchApplications();
-    }
   }, [activeTab]);
 
   const handleCreate = async (e) => {
@@ -762,6 +749,18 @@ export default function AgencyDashboard() {
         console.error(err);
         toast.error('Failed to update tenant status');
       }
+    }
+  };
+
+  const handleToggleOnline = async (res) => {
+    const nextOnline = !res.online;
+    try {
+      await agencyApi.put(`/restaurants/${res.id}`, { online: nextOnline });
+      toast.success(`Service status set to ${nextOnline ? 'ONLINE' : 'OFFLINE'}`);
+      fetchRestaurants();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to change service status');
     }
   };
 
@@ -1115,12 +1114,16 @@ export default function AgencyDashboard() {
                       }`}>
                         {res.active ? 'ACTIVE' : 'BLOCKED'}
                       </span>
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        isOnline ? 'bg-green-50 text-green-700' : 'bg-rose-50 text-rose-700'
-                      }`}>
+                      <button
+                        onClick={() => handleToggleOnline(res)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold hover:opacity-85 active:scale-95 transition-all ${
+                          isOnline ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200' : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                        }`}
+                        title={isOnline ? 'Switch to OFFLINE' : 'Switch to ONLINE'}
+                      >
                         <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-rose-500'}`} />
                         {isOnline ? 'ONLINE' : 'OFFLINE'}
-                      </span>
+                      </button>
                     </div>
                   </div>
 
@@ -1197,30 +1200,32 @@ export default function AgencyDashboard() {
                     </button>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleToggleBlock(res)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-colors border ${
-                        res.active
-                          ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                          : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                      }`}
-                    >
-                      <Power className="w-3.5 h-3.5" />
-                      <span>{res.active ? 'Block Tenant' : 'Activate'}</span>
-                    </button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleToggleBlock(res)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-colors border ${
+                          res.active
+                            ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                            : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                        }`}
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                        <span>{res.active ? 'Block Tenant' : 'Activate'}</span>
+                      </button>
 
-                    <a
-                      href={`/r/${res.id}/login`}
-                      className={`py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                        isOnline && res.active
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm' 
-                          : 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
-                      }`}
-                    >
-                      <span>Open</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                      <a
+                        href={`/r/${res.id}/login`}
+                        className={`py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                          isOnline && res.active
+                            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm' 
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
+                        }`}
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   </div>
 
                   {/* Delete section */}

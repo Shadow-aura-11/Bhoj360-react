@@ -485,8 +485,8 @@ app.put('/settings/pins', authMiddleware('admin'), (req, res) => {
   res.json({ message: 'Login credentials updated successfully', pins: config.pins });
 });
 
-// GET /settings/printer — Get current printer configs [STAFF/ADMIN]
-app.get('/settings/printer', authMiddleware('staff'), (req, res) => {
+// GET /settings/printer — Get current printer configs [ADMIN]
+app.get('/settings/printer', authMiddleware('admin'), (req, res) => {
   const config = readConfig();
   res.json({ printer: config.printer || { enabled: false, size: '80mm' } });
 });
@@ -1117,8 +1117,8 @@ app.post('/orders/self', (req, res) => {
 
       if (Array.isArray(item.addons) && item.addons.length > 0) {
         addonsJson = JSON.stringify(item.addons);
-        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
-        finalPrice += addonsTotal;
+        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price * (ad.quantity || 1), 0);
+        finalPrice += (addonsTotal / qty);
       }
 
       db.prepare(
@@ -1197,8 +1197,8 @@ app.post('/orders', authMiddleware('staff'), (req, res) => {
 
         if (Array.isArray(item.addons) && item.addons.length > 0) {
           addonsJson = JSON.stringify(item.addons);
-          const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
-          finalPrice += addonsTotal;
+          const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price * (ad.quantity || 1), 0);
+          finalPrice += (addonsTotal / qty);
         }
 
         db.prepare(
@@ -1322,8 +1322,8 @@ app.post('/orders/:id/items', authMiddleware('staff'), (req, res) => {
 
       if (Array.isArray(item.addons) && item.addons.length > 0) {
         addonsJson = JSON.stringify(item.addons);
-        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price, 0);
-        finalPrice += addonsTotal;
+        const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price * (ad.quantity || 1), 0);
+        finalPrice += (addonsTotal / qty);
       }
 
       db.prepare(
@@ -1547,7 +1547,6 @@ app.post('/orders/:id/settle', authMiddleware('staff'), (req, res) => {
   }
 
   // Auto-print receipt on settlement
-  const config = readConfig();
   if (config.printing?.auto_print?.on_settlement) {
     console.log(`[Printer] AUTO-PRINT BILL: Order #${req.params.id} settled via ${payment_method}. Total: INR ${finalTotal}. Printing bill preview...`);
   }
@@ -1599,15 +1598,7 @@ app.put('/settings/config', authMiddleware('admin'), (req, res) => {
   if (location !== undefined) config.location = location;
   if (fssai_compliance !== undefined) config.fssai_compliance = fssai_compliance;
   if (billing !== undefined) config.billing = billing;
-  if (printing !== undefined) {
-    config.printing = printing;
-    if (printing.hardware) {
-      config.printer = {
-        enabled: !!printing.hardware.enabled,
-        size: printing.hardware.size === '58mm' ? '58mm' : '80mm'
-      };
-    }
-  }
+  if (printing !== undefined) config.printing = printing;
   if (google_review_url !== undefined) config.google_review_url = google_review_url;
   if (qr_theme !== undefined) config.qr_theme = qr_theme;
   if (logo_url !== undefined) config.logo_url = logo_url;

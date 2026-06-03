@@ -99,7 +99,6 @@ export default function CashierDashboard() {
 
   // Receipt printing states
   const [receiptOrder, setReceiptOrder] = useState(null);
-  const [showThermalPreview, setShowThermalPreview] = useState(false);
 
   // Double tap gesture state
   const [lastTap, setLastTap] = useState({ tableId: null, time: 0 });
@@ -479,10 +478,6 @@ export default function CashierDashboard() {
           {config?.fssai_compliance && (
             <div className="text-center text-[7.5px] text-slate-800 mb-1">FSSAI No: {config.fssai_compliance}</div>
           )}
-
-          {config?.printing?.bill_setting?.show_contact !== false && config?.contact_phone && (
-            <div className="text-center text-[8px] text-slate-800 mb-1">📞 {config.contact_phone}</div>
-          )}
           
           <div className="border-b border-dashed border-black pb-1.5 mb-2"></div>
           
@@ -510,19 +505,10 @@ export default function CashierDashboard() {
               <span className="w-1/3 text-right">Price</span>
             </div>
             {receiptOrder.items?.map((item) => (
-              <div key={item.id}>
-                <div className="flex justify-between">
-                  <span className="w-1/2 truncate">{item.item_name}</span>
-                  <span className="w-1/6 text-center">{item.quantity}</span>
-                  <span className="w-1/3 text-right">₹{(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-                {item.addons && item.addons.length > 0 && (
-                  <div className="pl-2 text-[7px] text-slate-600">
-                    {item.addons.map((ad, adIdx) => (
-                      <div key={adIdx}>+ {ad.name} ₹{(ad.price || 0).toFixed(2)}</div>
-                    ))}
-                  </div>
-                )}
+              <div key={item.id} className="flex justify-between">
+                <span className="w-1/2 truncate">{item.item_name}</span>
+                <span className="w-1/6 text-center">{item.quantity}</span>
+                <span className="w-1/3 text-right">₹{(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className="border-b border-dashed border-black pb-1"></div>
@@ -710,7 +696,7 @@ export default function CashierDashboard() {
                     <div className="mt-3">
                       {tableOrder ? (
                         <div className="flex justify-between items-center w-full">
-                          <span className="text-xs font-bold text-emerald-605 font-mono">₹{calculateTotalPayable(tableOrder, tableOrder.discount_amount || 0, config?.billing).toFixed(2)}</span>
+                          <span className="text-xs font-bold text-emerald-605 font-mono">₹{tableOrder.total}</span>
                           <span className={`text-[9px] px-2 py-0.5 rounded font-black font-mono ${
                             isRequested ? 'bg-amber-600 text-white animate-bounce' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
                           }`}>
@@ -907,7 +893,7 @@ export default function CashierDashboard() {
                       <span className="text-[10px] text-slate-400 font-mono block">#{activeOrder.id}</span>
                       <span className="text-xs font-semibold text-slate-600">Total Seated:</span>
                     </div>
-                    <span className="text-xl font-bold font-mono text-emerald-600">₹{calculateTotalPayable(activeOrder, activeOrder.discount_amount || 0, config?.billing).toFixed(2)}</span>
+                    <span className="text-xl font-bold font-mono text-emerald-600">₹{activeOrder.total}</span>
                   </div>
 
                   <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
@@ -930,7 +916,7 @@ export default function CashierDashboard() {
                       Settle Order (Bill Checkout)
                     </button>
                     <button
-                      onClick={() => { setReceiptOrder(activeOrder); setShowThermalPreview(true); }}
+                      onClick={() => handlePrintReceipt(activeOrder)}
                       className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5"
                     >
                       <Printer className="w-4 h-4" /> Print Bill Invoice
@@ -1193,86 +1179,6 @@ export default function CashierDashboard() {
           </div>
         </div>
       )}
-
-      {/* Live Thermal Preview Modal */}
-      {showThermalPreview && receiptOrder && (() => {
-        const thermalWidth = config?.printing?.hardware?.size === '58mm' ? '58mm' : '80mm';
-        const isNarrow = thermalWidth === '58mm';
-        const items = receiptOrder.items || [];
-        const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0) || receiptOrder.total || 0;
-        const discount = receiptOrder.discount_amount || 0;
-        const afterDiscount = subtotal - discount;
-        const gstEnabled = config?.billing?.gst_enabled;
-        const gstPercent = config?.billing?.gst_percentage || 0;
-        const gstAmt = gstEnabled ? (afterDiscount * gstPercent) / 100 : 0;
-        const scEnabled = config?.billing?.service_charge_enabled ?? true;
-        const scPercent = scEnabled ? (config?.billing?.service_charge_percentage || 0) : 0;
-        const scAmt = (afterDiscount * scPercent) / 100;
-        const grandTotal = afterDiscount + gstAmt + scAmt;
-        return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowThermalPreview(false)} />
-            <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 flex flex-col gap-4 max-h-[92vh] overflow-y-auto w-full max-w-md">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-lg text-slate-800">Live Thermal Preview</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Paper: {thermalWidth}</p>
-                </div>
-                <button onClick={() => setShowThermalPreview(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="mx-auto bg-[#fffef7] border-2 border-dashed border-slate-300 rounded-xl shadow-inner overflow-auto" style={{ width: isNarrow ? '220px' : '302px', maxWidth: '100%' }}>
-                <div style={{ fontFamily: 'monospace', fontSize: isNarrow ? '8.5px' : '10px', lineHeight: '1.5', padding: '10px', color: 'black' }}>
-                  {config?.printing?.bill_setting?.show_logo && (
-                    <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                      {config.logo_url ? <img src={config.logo_url} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '50%', margin: '0 auto', display: 'block' }} /> : <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', margin: '0 auto' }}>{(config.name || 'L').charAt(0)}</div>}
-                    </div>
-                  )}
-                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: isNarrow ? '11px' : '13px', marginBottom: '2px', textTransform: 'uppercase' }}>{config?.name || 'Restaurant'}</div>
-                  {config?.printing?.bill_setting?.show_address !== false && config?.location && <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: '2px' }}>{config.location}</div>}
-                  {config?.printing?.bill_setting?.show_contact !== false && config?.contact_phone && <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: '2px' }}>📞 {config.contact_phone}</div>}
-                  {config?.fssai_compliance && <div style={{ textAlign: 'center', fontSize: '7px', marginBottom: '2px' }}>FSSAI: {config.fssai_compliance}</div>}
-                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}><span>Table: {receiptOrder.table_number || 'Takeaway'}</span><span>#{receiptOrder.id}</span></div>
-                  <div style={{ fontSize: '7px', color: '#666' }}>{new Date(receiptOrder.settled_at || receiptOrder.created_at).toLocaleString()}</div>
-                  {config?.printing?.bill_setting?.show_customer_info && receiptOrder.customer_phone && <div style={{ fontSize: '8px' }}>Cust: {receiptOrder.customer_phone}</div>}
-                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginBottom: '3px', borderBottom: '1px solid #aaa', paddingBottom: '2px' }}>
-                    <span style={{ width: '50%' }}>Item</span><span style={{ width: '15%', textAlign: 'center' }}>Qty</span><span style={{ width: '35%', textAlign: 'right' }}>Price</span>
-                  </div>
-                  {items.map((item, idx) => (
-                    <div key={idx}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ width: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.item_name}</span>
-                        <span style={{ width: '15%', textAlign: 'center' }}>{item.quantity}</span>
-                        <span style={{ width: '35%', textAlign: 'right' }}>₹{(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                      {item.addons && item.addons.length > 0 && <div style={{ paddingLeft: '6px', fontSize: '7px', color: '#555' }}>{item.addons.map((ad, ai) => <div key={ai}>+ {ad.name} ₹{(ad.price || 0).toFixed(2)}</div>)}</div>}
-                    </div>
-                  ))}
-                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span></div>
-                  {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Discount</span><span>-₹{discount.toFixed(2)}</span></div>}
-                  {gstEnabled && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>GST ({gstPercent}%)</span><span>₹{gstAmt.toFixed(2)}</span></div>}
-                  {scPercent > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Svc Charge ({scPercent}%)</span><span>₹{scAmt.toFixed(2)}</span></div>}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderTop: '1px dashed black', marginTop: '4px', paddingTop: '3px', fontSize: isNarrow ? '10px' : '12px' }}><span>TOTAL</span><span>₹{grandTotal.toFixed(2)}</span></div>
-                  {receiptOrder.payment_method && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginTop: '2px', fontStyle: 'italic' }}><span>Paid via:</span><span style={{ textTransform: 'uppercase' }}>{receiptOrder.payment_method}</span></div>}
-                  <div style={{ borderBottom: '1px dashed black', margin: '4px 0' }} />
-                  <div style={{ textAlign: 'center', fontSize: '8px' }}>{config?.printing?.bill_setting?.custom_footer || 'Thank you! Visit again.'}</div>
-                  <div style={{ textAlign: 'center', fontSize: '7px', color: '#888', marginTop: '2px' }}>Powered by Bhoj360</div>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowThermalPreview(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl border border-slate-200">Close</button>
-                <button onClick={() => { setShowThermalPreview(false); setTimeout(() => handlePrintReceipt(receiptOrder), 100); }} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-2xl shadow-md flex items-center justify-center gap-2">
-                  <Printer className="w-4 h-4" /> Print
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* POS Order Items modal */}
       <NewOrderModal

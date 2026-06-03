@@ -24,6 +24,7 @@ export default function Login() {
   const [agencyUrl, setAgencyUrl] = useState('');
   
   // PWA Install properties
+  const [isBlocked, setIsBlocked] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -97,6 +98,9 @@ export default function Login() {
         if (data.login_theme_color) setThemeColor(data.login_theme_color);
       } catch (err) {
         console.error(err);
+        if (err.response?.status === 403 && err.response?.data?.blocked) {
+          setIsBlocked(true);
+        }
       }
     };
     const loadAgencySettings = async () => {
@@ -390,7 +394,23 @@ export default function Login() {
             </h3>
           </div>
 
-          {!selectedRole ? (
+          {isBlocked ? (
+            <div className="w-full text-center space-y-6 py-8 animate-slide-up">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                <Shield className="w-8 h-8 text-red-600 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-800 font-display">Portal Suspended</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  This restaurant portal is currently offline or suspended by the administration.
+                  Please contact support if you think this is a mistake.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl text-[11px] text-slate-500 max-w-sm mx-auto">
+                Tenant: <span className="font-mono font-bold text-slate-700">{restaurantId}</span>
+              </div>
+            </div>
+          ) : !selectedRole ? (
             /* Role grid */
             <div className="w-full space-y-4">
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block text-center mb-2">

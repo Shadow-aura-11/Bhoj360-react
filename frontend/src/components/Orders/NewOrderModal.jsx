@@ -24,7 +24,7 @@ export default function NewOrderModal({
   
   // Mobile UI Tabs: 'menu' | 'cart'
   const [mobileTab, setMobileTab] = useState('menu');
-  const [showCategoryPopover, setShowCategoryPopover] = useState(false);
+  const [showCategoryPopup, setShowCategoryPopup] = useState(false);
 
   const api = createApi(restaurantId);
 
@@ -51,7 +51,6 @@ export default function NewOrderModal({
       setCustomerPhone(initialCustomerPhone);
       setCustomerName('');
       setMobileTab('menu');
-      setShowCategoryPopover(false);
     }
   }, [restaurantId, isOpen, initialCustomerPhone]);
 
@@ -102,25 +101,36 @@ export default function NewOrderModal({
     );
   };
 
-  const updateCartItemAddonQty = (itemId, addon, delta) => {
+  const toggleCartItemAddon = (itemId, addon) => {
     setCart((prev) =>
       prev.map((cartItem) => {
         if (cartItem.menu_item_id === itemId) {
           const currentAddons = cartItem.addons || [];
-          const existingIndex = currentAddons.findIndex((a) => a.id === addon.id);
-          
-          let nextAddons = [...currentAddons];
-          if (existingIndex > -1) {
-            const currentQty = nextAddons[existingIndex].quantity || 1;
-            const nextQty = currentQty + delta;
-            if (nextQty <= 0) {
-              nextAddons.splice(existingIndex, 1);
-            } else {
-              nextAddons[existingIndex] = { ...nextAddons[existingIndex], quantity: nextQty };
-            }
-          } else if (delta > 0) {
-            nextAddons.push({ ...addon, quantity: 1 });
-          }
+          const exists = currentAddons.some((a) => a.id === addon.id);
+          const nextAddons = exists
+            ? currentAddons.filter((a) => a.id !== addon.id)
+            : [...currentAddons, { ...addon, quantity: 1 }];
+          return { ...cartItem, addons: nextAddons };
+        }
+        return cartItem;
+      })
+    );
+  };
+
+  const updateCartItemAddonQty = (itemId, addonId, amount) => {
+    setCart((prev) =>
+      prev.map((cartItem) => {
+        if (cartItem.menu_item_id === itemId) {
+          const currentAddons = cartItem.addons || [];
+          const nextAddons = currentAddons
+            .map((ad) => {
+              if (ad.id === addonId) {
+                const nextQty = (ad.quantity || 1) + amount;
+                return nextQty > 0 ? { ...ad, quantity: nextQty } : null;
+              }
+              return ad;
+            })
+            .filter(Boolean);
           return { ...cartItem, addons: nextAddons };
         }
         return cartItem;
@@ -151,46 +161,10 @@ export default function NewOrderModal({
         return;
       }
     }
-
-    const processedItems = [];
-    for (const item of cart) {
-      // 1. Flatten the addons list according to each addon's quantity
-      const flattenedAddons = [];
-      for (const ad of item.addons || []) {
-        const qty = ad.quantity || 1;
-        for (let i = 0; i < qty; i++) {
-          flattenedAddons.push({
-            id: ad.id,
-            name: ad.name,
-            price: ad.price
-          });
-        }
-      }
-
-      // 2. Split item if quantity > 1 and it has addons
-      if (item.quantity > 1 && flattenedAddons.length > 0) {
-        processedItems.push({
-          ...item,
-          quantity: 1,
-          addons: flattenedAddons
-        });
-        processedItems.push({
-          ...item,
-          quantity: item.quantity - 1,
-          addons: [],
-        });
-      } else {
-        processedItems.push({
-          ...item,
-          addons: flattenedAddons
-        });
-      }
-    }
-
     onSubmit({
       table_id: tableId,
       table_number: tableNumber,
-      items: processedItems,
+      items: cart,
       notes,
       customer_phone: customerPhone.trim(),
       customer_name: customerName.trim(),
@@ -265,22 +239,57 @@ export default function NewOrderModal({
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
           
           {/* Left panel: Menu items */}
-          <div className={`relative flex-1 flex flex-col p-5 overflow-hidden border-b md:border-b-0 md:border-r border-slate-200 ${mobileTab === 'menu' ? 'flex' : 'hidden md:flex'}`}>
-            {/* Category tabs (hidden on mobile, visible on desktop) */}
+          <div className={`flex-1 flex flex-col p-5 overflow-hidden border-b md:border-b-0 md:border-r border-slate-200 relative ${mobileTab === 'menu' ? 'flex' : 'hidden md:flex'}`}>
+            {/* Category tabs */}
             <div className="hidden md:flex gap-2 overflow-x-auto pb-3 mb-4 scroll-smooth flex-shrink-0 no-print">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border whitespace-nowrap ${
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5 ${
                     activeCategory === cat
                       ? 'bg-amber-600 border-amber-500 text-white shadow-md'
                       : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-800'
                   }`}
                 >
+                  <Filter className={`w-3.5 h-3.5 transition-opacity ${activeCategory === cat ? 'opacity-100' : 'opacity-40'}`} />
                   {cat}
                 </button>
               ))}
+            </div>
+
+            {/* Mobile Category FAB */}
+            <div className="md:hidden absolute bottom-5 right-5 z-20">
+              {showCategoryPopup && (
+                <div className="absolute bottom-14 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 w-48 max-h-60 overflow-y-auto flex flex-col gap-1.5 animate-slide-up no-print">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-1">Categories</span>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        setActiveCategory(cat);
+                        setShowCategoryPopup(false);
+                      }}
+                      className={`px-3 py-2 text-left rounded-xl text-xs font-semibold transition-all flex items-center justify-between border ${
+                        activeCategory === cat
+                          ? 'bg-amber-600 border-amber-600 text-white font-bold shadow-sm'
+                          : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      <Filter className={`w-3 h-3 ${activeCategory === cat ? 'text-white' : 'text-slate-400'}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowCategoryPopup(!showCategoryPopup)}
+                className="w-12 h-12 bg-amber-600 hover:bg-amber-500 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+              >
+                <Filter className="w-5 h-5 text-white" />
+              </button>
             </div>
 
             {/* Items grid */}
@@ -352,46 +361,6 @@ export default function NewOrderModal({
                 </div>
               )}
             </div>
-
-            {/* Mobile Category FAB & Popover */}
-            <div className="md:hidden">
-              {/* Category Popover */}
-              {showCategoryPopover && (
-                <div className="absolute bottom-20 right-5 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 w-48 space-y-1 animate-slide-up">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-2 mb-1">
-                    Categories
-                  </span>
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {categories.map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => {
-                          setActiveCategory(cat);
-                          setShowCategoryPopover(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                          activeCategory === cat
-                            ? 'bg-amber-600 text-white font-bold'
-                            : 'hover:bg-slate-50 text-slate-655'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Floating Action Button */}
-              <button
-                type="button"
-                onClick={() => setShowCategoryPopover(!showCategoryPopover)}
-                className="absolute bottom-6 right-6 z-40 w-12 h-12 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-full shadow-lg flex items-center justify-center transition-all animate-pulse-ready"
-              >
-                {showCategoryPopover ? <X className="w-5 h-5" /> : <Filter className="w-5 h-5" />}
-              </button>
-            </div>
           </div>
 
           {/* Right panel: Cart summary */}
@@ -405,9 +374,8 @@ export default function NewOrderModal({
               </span>
             </h3>
 
-            {/* Scrollable area containing Cart Items AND Form Fields */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1 py-1 min-h-0">
-              {/* Cart Items list */}
+            {/* Cart Items list (Scrollable Container) */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 py-1">
               <div className="space-y-3">
                 {cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 text-sm py-10">
@@ -439,9 +407,9 @@ export default function NewOrderModal({
                         {/* Qty edit */}
                         <div className="flex items-center gap-1.5">
                           <button
-                            type="button; e.stopPropagation();"
+                            type="button"
                             onClick={() => updateQty(item.menu_item_id, -1)}
-                            className="w-6 h-6 rounded-lg bg-slate-105 border border-slate-200 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
+                            className="w-6.5 h-6.5 rounded-lg bg-slate-105 border border-slate-200 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
@@ -451,7 +419,7 @@ export default function NewOrderModal({
                           <button
                             type="button"
                             onClick={() => updateQty(item.menu_item_id, 1)}
-                            className="w-6 h-6 rounded-lg bg-slate-105 border border-slate-200 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
+                            className="w-6.5 h-6.5 rounded-lg bg-slate-105 border border-slate-200 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -473,33 +441,45 @@ export default function NewOrderModal({
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Add-ons:</span>
                             <div className="flex flex-col gap-1.5">
                               {availableAddons.map((ad) => {
-                                const selectedAddon = (item.addons || []).find((a) => a.id === ad.id);
-                                const qty = selectedAddon ? (selectedAddon.quantity || 1) : 0;
+                                const cartAddon = (item.addons || []).find((a) => a.id === ad.id);
+                                const isSelected = !!cartAddon;
+                                const addonQty = cartAddon ? (cartAddon.quantity || 1) : 0;
                                 return (
-                                  <div key={ad.id} className="flex items-center justify-between text-xs text-slate-600 select-none">
-                                    <div className="font-semibold text-slate-700">
-                                      <span>{ad.name}</span>
-                                      <span className="font-mono text-slate-400 font-bold ml-1.5">(+₹{ad.price})</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                                      <button
-                                        type="button"
-                                        onClick={() => updateCartItemAddonQty(item.menu_item_id, ad, -1)}
-                                        className="w-5 h-5 rounded bg-white flex items-center justify-center text-[10px] font-bold text-slate-500 hover:bg-slate-50"
-                                        disabled={qty === 0}
-                                      >
-                                        -
-                                      </button>
-                                      <span className="text-[10px] font-mono font-bold text-slate-700 px-1 min-w-4 text-center">
-                                        {qty}
+                                  <div key={ad.id} className="flex items-center justify-between text-xs text-slate-600 select-none py-0.5">
+                                    <label className="flex items-center gap-1.5 font-semibold text-slate-700 cursor-pointer flex-1 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => toggleCartItemAddon(item.menu_item_id, ad)}
+                                        className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-3.5 h-3.5"
+                                      />
+                                      <span className="truncate">{ad.name}</span>
+                                    </label>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      <span className="font-mono text-slate-405 font-bold">
+                                        +₹{ad.price}{addonQty > 1 && ` x ${addonQty}`}
                                       </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => updateCartItemAddonQty(item.menu_item_id, ad, 1)}
-                                        className="w-5 h-5 rounded bg-white flex items-center justify-center text-[10px] font-bold text-slate-500 hover:bg-slate-50"
-                                      >
-                                        +
-                                      </button>
+                                      {isSelected && (
+                                        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                                          <button
+                                            type="button"
+                                            onClick={() => updateCartItemAddonQty(item.menu_item_id, ad.id, -1)}
+                                            className="w-4.5 h-4.5 rounded bg-white hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-[10px] shadow-xs"
+                                          >
+                                            -
+                                          </button>
+                                          <span className="text-[10px] font-mono font-bold text-slate-700 w-3 text-center">
+                                            {addonQty}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateCartItemAddonQty(item.menu_item_id, ad.id, 1)}
+                                            className="w-4.5 h-4.5 rounded bg-white hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-[10px] shadow-xs"
+                                          >
+                                            +
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -524,7 +504,7 @@ export default function NewOrderModal({
 
               {/* Customer Details (only for new orders) */}
               {!existingOrderId && (
-                <div className="pt-4 border-t border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="pt-3 border-t border-slate-200/60 grid grid-cols-1 gap-3">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                       Customer Name
@@ -555,7 +535,7 @@ export default function NewOrderModal({
               )}
 
               {/* General instructions */}
-              <div className="pt-4 border-t border-slate-200/60">
+              <div className="pt-3 border-t border-slate-200/60">
                 <label className="block text-[10px] font-semibold text-slate-450 uppercase tracking-wider mb-1.5">Order-wide Notes</label>
                 <textarea
                   rows="2"
@@ -571,7 +551,7 @@ export default function NewOrderModal({
             <div className="mt-4 border-t border-slate-200 pt-4 flex-shrink-0">
               <div className="flex items-center justify-between text-sm font-semibold mb-4">
                 <span className="text-slate-450">Total Price</span>
-                <span className="text-xl font-bold font-mono text-emerald-605 font-bold">₹{getCartTotal()}</span>
+                <span className="text-xl font-bold font-mono text-emerald-600">₹{getCartTotal()}</span>
               </div>
 
               <button

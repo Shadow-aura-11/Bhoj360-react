@@ -19,6 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <App />
       <Toaster 
+        containerClassName="no-print"
         position="bottom-right" 
         toastOptions={{ 
           duration: 4000, 

@@ -93,7 +93,9 @@
   body {
     @apply bg-white text-black;
   }
-  .no-print {
+  .no-print,
+  body > div[style*="position: fixed"],
+  body > div[class*="toast"] {
     display: none !important;
   }
   .print-only {

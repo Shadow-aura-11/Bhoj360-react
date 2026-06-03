@@ -460,22 +460,21 @@ app.get('/api/restaurants/:id/stats', requireAgencyAuth, async (req, res) => {
     });
 
     proxyReq.on('error', () => {
-      res.status(503).json({ error: 'Restaurant service is offline' });
+      res.json({ ordersCount: 0, revenue: 0, tableTurnover: '0%', offline: true });
     });
 
-    proxyReq.setTimeout(3000, () => {
+    proxyReq.setTimeout(1500, () => {
       proxyReq.destroy();
-      res.status(504).json({ error: 'Restaurant service timeout' });
+      res.json({ ordersCount: 0, revenue: 0, tableTurnover: '0%', offline: true });
     });
   } catch (err) {
-    console.error('[Agency] Error fetching stats:', err.message);
-    res.status(500).json({ error: 'Failed to fetch restaurant stats' });
+    res.json({ ordersCount: 0, revenue: 0, tableTurnover: '0%', offline: true });
   }
 });
 
 // PUT /api/restaurants/:id — Edit restaurant details
 app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
-  const { name, active, pins, logo_url, description, logout_redirect_url, login_theme_color, location, contact_email, contact_phone } = req.body;
+  const { name, active, online, pins, logo_url, description, logout_redirect_url, login_theme_color, location, contact_email, contact_phone } = req.body;
   const { id } = req.params;
 
   try {
@@ -487,7 +486,10 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
 
     const oldActive = entry.active;
     if (name !== undefined) entry.name = name;
-    if (active !== undefined) entry.active = active;
+    if (active !== undefined) {
+      entry.active = active;
+      entry.online = active;
+    }
     if (logo_url !== undefined) entry.logo_url = logo_url;
     if (description !== undefined) entry.description = description;
     if (logout_redirect_url !== undefined) entry.logout_redirect_url = logout_redirect_url;
@@ -495,6 +497,7 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
     if (location !== undefined) entry.location = location;
     if (contact_email !== undefined) entry.contact_email = contact_email;
     if (contact_phone !== undefined) entry.contact_phone = contact_phone;
+    if (online !== undefined && active === undefined) entry.online = online;
     
     // Save registry
     fs.writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2), 'utf8');
@@ -504,7 +507,13 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       if (name !== undefined) config.name = name;
-      if (active !== undefined) config.active = active;
+      if (active !== undefined) {
+        config.active = active;
+        config.online = active;
+      }
+      if (online !== undefined && active === undefined) {
+        config.online = online;
+      }
       if (logo_url !== undefined) config.logo_url = logo_url;
       if (description !== undefined) config.description = description;
       if (logout_redirect_url !== undefined) config.logout_redirect_url = logout_redirect_url;
@@ -528,6 +537,13 @@ app.put('/api/restaurants/:id', requireAgencyAuth, async (req, res) => {
     } else if (active === true && oldActive !== true) {
       await killPort(entry.port);
       await startRestaurant(entry);
+    } else if (online === false) {
+      await killPort(entry.port);
+    } else if (online === true) {
+      await killPort(entry.port);
+      if (entry.active !== false) {
+        await startRestaurant(entry);
+      }
     } else if (name !== undefined || pins !== undefined || logo_url !== undefined || description !== undefined || logout_redirect_url !== undefined || login_theme_color !== undefined) {
       if (entry.active) {
         await killPort(entry.port);
