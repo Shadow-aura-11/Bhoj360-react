@@ -344,8 +344,16 @@ export default function WaiterDashboard() {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'hi-IN';
       utterance.rate = 0.95;
       utterance.pitch = 1.0;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const hindiVoice = voices.find(v => v.lang === 'hi-IN' || v.lang.startsWith('hi'));
+      if (hindiVoice) {
+        utterance.voice = hindiVoice;
+      }
+      
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -361,7 +369,7 @@ export default function WaiterDashboard() {
       if (!tblNum) return;
       playLoudSound();
       if (speechEnabled) {
-        speakText(`Table ${tblNum} is calling for attention.`);
+        speakText(`टेबल ${tblNum} पर वेटर को बुलाया गया है`);
       }
       setWaiterCalls((prev) => ({ ...prev, [tblNum]: true }));
       setNotifications((prev) => [
@@ -389,8 +397,14 @@ export default function WaiterDashboard() {
       
       const existingOrder = ordersRef.current.find((o) => o.id === order.id);
       if (existingOrder && existingOrder.status !== order.status) {
-        const statusText = order.status === 'ready' ? 'ready' : order.status === 'preparing' ? 'preparing' : order.status === 'served' ? 'served' : order.status === 'paid' ? 'paid' : order.status;
-        const msg = `Table ${order.table_number || order.table_id} order is now ${statusText}.`;
+        let statusHindi = '';
+        if (order.status === 'ready') statusHindi = 'तैयार है';
+        else if (order.status === 'preparing') statusHindi = 'तैयार हो रहा है';
+        else if (order.status === 'served') statusHindi = 'परोसा जा चुका है';
+        else if (order.status === 'paid') statusHindi = 'का भुगतान हो गया है';
+        else statusHindi = order.status;
+
+        const msg = `टेबल ${order.table_number || order.table_id} का ऑर्डर ${statusHindi}`;
         playLoudSound();
         if (speechEnabled) {
           speakText(msg);
@@ -410,7 +424,7 @@ export default function WaiterDashboard() {
     const handleNewOrder = (order) => {
       playLoudSound();
       if (order && speechEnabled) {
-        speakText(`New order placed for Table ${order.table_number || order.table_id}`);
+        speakText(`टेबल ${order.table_number || order.table_id} का नया ऑर्डर प्राप्त हुआ है`);
       }
       refreshOrders();
       refreshTables();
