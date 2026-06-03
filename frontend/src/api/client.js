@@ -18,9 +18,9 @@ agencyApi.interceptors.request.use((config) => {
 agencyApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/app/login') {
+    if (error.response?.status === 401 && window.location.pathname !== '/') {
       localStorage.removeItem('agency_token');
-      window.location.href = '/app/login';
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }

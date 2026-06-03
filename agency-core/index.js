@@ -165,14 +165,7 @@ async function sendOTPEmail(settings, toEmail, otp) {
 // ─── Auth Middleware ─────────────────────────────────────────
 
 function requireAgencyAuth(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized. Please log in.' });
-  }
-  const token = authHeader.slice(7);
-  if (!sessionTokenStore.has(token)) {
-    return res.status(401).json({ error: 'Session expired. Please log in again.' });
-  }
+  // Authentication disabled: bypass and proceed
   next();
 }
 
