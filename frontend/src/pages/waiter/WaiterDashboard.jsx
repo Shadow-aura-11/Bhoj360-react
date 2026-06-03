@@ -19,7 +19,8 @@ const calculateTotalPayable = (order, discount, billingConfig) => {
   const gstEnabled = billingConfig?.gst_enabled;
   const gstPercent = billingConfig?.gst_percentage || 0;
   const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-  const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+  const serviceChargeEnabled = billingConfig?.service_charge_enabled ?? true;
+  const serviceChargePercent = serviceChargeEnabled ? (billingConfig?.service_charge_percentage || 0) : 0;
   const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
   return taxableAmount + gstAmount + serviceChargeAmount;
 };
@@ -1189,7 +1190,8 @@ export default function WaiterDashboard() {
                 const gstEnabled = restaurantConfig?.billing?.gst_enabled;
                 const gstPercent = restaurantConfig?.billing?.gst_percentage || 0;
                 const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-                const serviceChargePercent = restaurantConfig?.billing?.service_charge_percentage || 0;
+                const serviceChargeEnabled = restaurantConfig?.billing?.service_charge_enabled ?? true;
+                const serviceChargePercent = serviceChargeEnabled ? (restaurantConfig?.billing?.service_charge_percentage || 0) : 0;
                 const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
 
                 return (
@@ -1466,7 +1468,8 @@ export default function WaiterDashboard() {
                 const gstEnabled = restaurantConfig?.billing?.gst_enabled;
                 const gstPercent = restaurantConfig?.billing?.gst_percentage || 0;
                 const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-                const serviceChargePercent = restaurantConfig?.billing?.service_charge_percentage || 0;
+                const serviceChargeEnabled = restaurantConfig?.billing?.service_charge_enabled ?? true;
+                const serviceChargePercent = serviceChargeEnabled ? (restaurantConfig?.billing?.service_charge_percentage || 0) : 0;
                 const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
                 const grandTotal = taxableAmount + gstAmount + serviceChargeAmount;
 

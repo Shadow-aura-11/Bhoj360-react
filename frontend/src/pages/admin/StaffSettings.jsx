@@ -46,6 +46,7 @@ export default function StaffSettings() {
     billing: {
       gst_enabled: true,
       gst_percentage: 5,
+      service_charge_enabled: true,
       service_charge_percentage: 0,
       upi_id: '',
       payment_systems_enabled: true
@@ -121,6 +122,7 @@ export default function StaffSettings() {
           billing: {
             gst_enabled: data.billing?.gst_enabled ?? true,
             gst_percentage: data.billing?.gst_percentage ?? 5,
+            service_charge_enabled: data.billing?.service_charge_enabled ?? true,
             service_charge_percentage: data.billing?.service_charge_percentage ?? 0,
             upi_id: data.billing?.upi_id ?? '',
             payment_systems_enabled: data.billing?.payment_systems_enabled ?? true,
@@ -569,34 +571,53 @@ export default function StaffSettings() {
                   </button>
                 </div>
 
-                {config.billing.gst_enabled && (
+                {/* Service Charge Enabled Toggle */}
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-805">Enable Service Charge</h4>
+                    <p className="text-[10px] text-slate-440 mt-0.5">Toggle service charge calculations on all order totals and bills</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, billing: { ...prev.billing, service_charge_enabled: !prev.billing.service_charge_enabled } }))}
+                    className="text-indigo-650 focus:outline-none"
+                  >
+                    {config.billing.service_charge_enabled ? <ToggleRight className="w-10 h-10" /> : <ToggleLeft className="w-10 h-10 text-slate-300" />}
+                  </button>
+                </div>
+
+                {(config.billing.gst_enabled || config.billing.service_charge_enabled) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">GST Rate (%)</label>
-                      <input 
-                        type="number"
-                        value={config.billing.gst_percentage}
-                        onChange={(e) => setConfig(prev => ({ ...prev, billing: { ...prev.billing, gst_percentage: parseFloat(e.target.value) || 0 } }))}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:bg-white font-mono"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">Service Charge Rate (%)</label>
-                      <input 
-                        type="number"
-                        value={config.billing.service_charge_percentage}
-                        onChange={(e) => setConfig(prev => ({ ...prev, billing: { ...prev.billing, service_charge_percentage: parseFloat(e.target.value) || 0 } }))}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:bg-white font-mono"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        required
-                      />
-                    </div>
+                    {config.billing.gst_enabled && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">GST Rate (%)</label>
+                        <input 
+                          type="number"
+                          value={config.billing.gst_percentage}
+                          onChange={(e) => setConfig(prev => ({ ...prev, billing: { ...prev.billing, gst_percentage: parseFloat(e.target.value) || 0 } }))}
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:bg-white font-mono"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                    )}
+                    {config.billing.service_charge_enabled && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">Service Charge Rate (%)</label>
+                        <input 
+                          type="number"
+                          value={config.billing.service_charge_percentage}
+                          onChange={(e) => setConfig(prev => ({ ...prev, billing: { ...prev.billing, service_charge_percentage: parseFloat(e.target.value) || 0 } }))}
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:bg-white font-mono"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -915,7 +936,7 @@ export default function StaffSettings() {
                         <span>₹{(440 * (config.billing.gst_percentage / 100)).toFixed(2)}</span>
                       </div>
                     )}
-                    {config.billing.service_charge_percentage > 0 && (
+                    {config.billing.service_charge_enabled && config.billing.service_charge_percentage > 0 && (
                       <div className="flex justify-between">
                         <span>Service Charge ({config.billing.service_charge_percentage}%)</span>
                         <span>₹{(440 * (config.billing.service_charge_percentage / 100)).toFixed(2)}</span>
@@ -923,7 +944,7 @@ export default function StaffSettings() {
                     )}
                     <div className="flex justify-between font-bold text-[10px] border-t border-dashed border-black/30 pt-1">
                       <span>TOTAL PAYABLE</span>
-                      <span>₹{(440 + (config.billing.gst_enabled ? (440 * (config.billing.gst_percentage / 100)) : 0) + (440 * (config.billing.service_charge_percentage / 100))).toFixed(2)}</span>
+                      <span>₹{(440 + (config.billing.gst_enabled ? (440 * (config.billing.gst_percentage / 100)) : 0) + (config.billing.service_charge_enabled ? (440 * (config.billing.service_charge_percentage / 100)) : 0)).toFixed(2)}</span>
                     </div>
                   </div>
 

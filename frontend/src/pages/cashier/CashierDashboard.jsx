@@ -15,7 +15,8 @@ const calculateTotalPayable = (order, discount, billingConfig) => {
   const gstEnabled = billingConfig?.gst_enabled;
   const gstPercent = billingConfig?.gst_percentage || 0;
   const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-  const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+  const serviceChargeEnabled = billingConfig?.service_charge_enabled ?? true;
+  const serviceChargePercent = serviceChargeEnabled ? (billingConfig?.service_charge_percentage || 0) : 0;
   const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
   return taxableAmount + gstAmount + serviceChargeAmount;
 };
@@ -521,7 +522,8 @@ export default function CashierDashboard() {
               const afterDiscount = subtotal - discount;
               const gstEnabled = config?.billing?.gst_enabled;
               const gstPercent = config?.billing?.gst_percentage || 0;
-              const serviceChargePercent = config?.billing?.service_charge_percentage || 0;
+              const serviceChargeEnabled = config?.billing?.service_charge_enabled ?? true;
+              const serviceChargePercent = serviceChargeEnabled ? (config?.billing?.service_charge_percentage || 0) : 0;
 
               const gstAmt = gstEnabled ? (afterDiscount * gstPercent) / 100 : 0;
               const scAmt = (afterDiscount * serviceChargePercent) / 100;
@@ -990,7 +992,8 @@ export default function CashierDashboard() {
                 const gstEnabled = config?.billing?.gst_enabled;
                 const gstPercent = config?.billing?.gst_percentage || 0;
                 const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-                const serviceChargePercent = config?.billing?.service_charge_percentage || 0;
+                const serviceChargeEnabled = config?.billing?.service_charge_enabled ?? true;
+                const serviceChargePercent = serviceChargeEnabled ? (config?.billing?.service_charge_percentage || 0) : 0;
                 const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
 
                 return (

@@ -480,7 +480,8 @@ export default function CustomerDashboard() {
     const gstEnabled = billingConfig?.gst_enabled;
     const gstPercent = billingConfig?.gst_percentage || 0;
     const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
-    const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+    const serviceChargeEnabled = billingConfig?.service_charge_enabled ?? true;
+    const serviceChargePercent = serviceChargeEnabled ? (billingConfig?.service_charge_percentage || 0) : 0;
     const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
     const grandTotal = taxableAmount + gstAmount + serviceChargeAmount;
     return { subtotal, discount, taxableAmount, gstAmount, serviceChargeAmount, grandTotal };
