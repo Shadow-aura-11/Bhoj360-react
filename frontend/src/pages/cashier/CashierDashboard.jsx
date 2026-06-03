@@ -459,14 +459,12 @@ export default function CashierDashboard() {
       {receiptOrder && (
         <div id="print-receipt-section">
           {/* Logo */}
-          {config?.printing?.bill_setting?.show_logo && (
-            config.logo_url ? (
-              <img src={config.logo_url} alt="Logo" className="w-10 h-10 rounded-full mx-auto object-contain bg-white border border-slate-200 mb-1" style={{ display: 'block', margin: '0 auto' }} />
-            ) : (
-              <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center font-bold text-[9px] mx-auto uppercase mb-1" style={{ display: 'flex', margin: '0 auto', alignItems: 'center', justifyContent: 'center' }}>
-                {config.name ? config.name.charAt(0) : 'L'}
-              </div>
-            )
+          {config?.logo_url ? (
+            <img src={config.logo_url} alt="Logo" className="w-10 h-10 rounded-full mx-auto object-contain bg-white border border-slate-200 mb-1" style={{ display: 'block', margin: '0 auto' }} />
+          ) : (
+            <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center font-bold text-[9px] mx-auto uppercase mb-1" style={{ display: 'flex', margin: '0 auto', alignItems: 'center', justifyContent: 'center' }}>
+              {config?.name ? config.name.charAt(0) : 'L'}
+            </div>
           )}
           
           <div className="text-center font-bold text-[12px] uppercase mb-1">{config?.name || restaurantName}</div>
@@ -504,13 +502,32 @@ export default function CashierDashboard() {
               <span className="w-1/6 text-center">Qty</span>
               <span className="w-1/3 text-right">Price</span>
             </div>
-            {receiptOrder.items?.map((item) => (
-              <div key={item.id} className="flex justify-between">
-                <span className="w-1/2 truncate">{item.item_name}</span>
-                <span className="w-1/6 text-center">{item.quantity}</span>
-                <span className="w-1/3 text-right">₹{(item.price * item.quantity).toFixed(2)}</span>
-              </div>
-            ))}
+            {receiptOrder.items?.map((item) => {
+              const itemAddons = item.addons || (item.addons_json ? (() => {
+                try { return JSON.parse(item.addons_json); } catch (e) { return []; }
+              })() : []);
+              return (
+                <div key={item.id} className="mb-1">
+                  <div className="flex justify-between">
+                    <span className="w-1/2 truncate">
+                      {item.is_addon ? '(Add-on) ' : ''}{item.item_name}
+                    </span>
+                    <span className="w-1/6 text-center">{item.quantity}</span>
+                    <span className="w-1/3 text-right">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                  {itemAddons && itemAddons.length > 0 && (
+                    <div className="pl-3 text-[7.5px] text-slate-700 italic space-y-0.5" style={{ paddingLeft: '8px' }}>
+                      {itemAddons.map((ad, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>+ {ad.name}</span>
+                          <span>₹{(ad.price * item.quantity).toFixed(2)} (Incl.)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="border-b border-dashed border-black pb-1"></div>
           </div>
 
