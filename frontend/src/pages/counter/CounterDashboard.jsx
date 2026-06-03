@@ -257,12 +257,12 @@ export default function CounterDashboard() {
       )}
 
       {/* Seating status bar strips */}
-      <div className="bg-rose-50/10 border-b border-rose-100 px-6 py-2 flex-shrink-0 overflow-x-auto no-print">
+      <div className="hidden md:block bg-rose-50/10 border-b border-rose-100 px-6 py-2 flex-shrink-0 overflow-x-auto no-print">
         <TableStatusBar tables={tables} />
       </div>
 
       {/* Active/Occupied tables status row */}
-      <div className="px-6 pt-4 flex-shrink-0">
+      <div className="hidden md:block px-6 pt-4 flex-shrink-0">
         <div className="bg-white border border-rose-100/60 rounded-3xl p-4 shadow-xs">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Occupied & Reserved Tables</h4>
           <div className="flex flex-wrap gap-2">
@@ -408,7 +408,7 @@ export default function CounterDashboard() {
       </main>
 
       {/* Bottom stats strip */}
-      <footer className="bg-white border-t border-rose-100 p-4 px-6 grid grid-cols-2 sm:grid-cols-4 gap-4 flex-shrink-0 text-center text-xs shadow-xs">
+      <footer className="hidden md:grid bg-white border-t border-rose-100 p-4 px-6 grid-cols-2 sm:grid-cols-4 gap-4 flex-shrink-0 text-center text-xs shadow-xs">
         <div>
           <span className="text-slate-400 block uppercase font-semibold">Avg Preparation Time</span>
           <span className="text-sm font-bold font-mono text-emerald-600 mt-0.5">{getAveragePrepTime()}</span>
@@ -425,6 +425,13 @@ export default function CounterDashboard() {
           <span className="text-slate-400 block uppercase font-semibold">KDS Queue depth</span>
           <span className="text-sm font-bold font-mono text-rose-600 mt-0.5">{pendingOrders.length} pending</span>
         </div>
+      </footer>
+
+      {/* Mobile Compact Footer */}
+      <footer className="bg-white border-t border-rose-100 p-3 px-4 flex justify-between items-center flex-shrink-0 text-[10px] text-slate-500 shadow-xs md:hidden">
+        <span>Completed: <strong className="text-slate-700 font-mono">{completedToday}</strong></span>
+        <span>Avg Prep: <strong className="text-emerald-600 font-mono">{getAveragePrepTime()}</strong></span>
+        <span>Active: <strong className="text-orange-600 font-mono">{preparingOrders.length}</strong></span>
       </footer>
 
       {/* Printer Scoped CSS and Print Ticket Layout */}
