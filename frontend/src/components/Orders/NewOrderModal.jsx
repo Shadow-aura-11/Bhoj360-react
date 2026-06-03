@@ -71,6 +71,7 @@ export default function NewOrderModal({
           price: item.price,
           quantity: 1,
           notes: '',
+          addons: [],
         },
       ];
     });
@@ -99,8 +100,27 @@ export default function NewOrderModal({
     );
   };
 
+  const toggleCartItemAddon = (itemId, addon) => {
+    setCart((prev) =>
+      prev.map((cartItem) => {
+        if (cartItem.menu_item_id === itemId) {
+          const currentAddons = cartItem.addons || [];
+          const exists = currentAddons.some((a) => a.id === addon.id);
+          const nextAddons = exists
+            ? currentAddons.filter((a) => a.id !== addon.id)
+            : [...currentAddons, addon];
+          return { ...cartItem, addons: nextAddons };
+        }
+        return cartItem;
+      })
+    );
+  };
+
   const getCartCount = () => cart.reduce((sum, item) => sum + item.quantity, 0);
-  const getCartTotal = () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const getCartTotal = () => cart.reduce((sum, item) => {
+    const addonsTotal = (item.addons || []).reduce((s, ad) => s + ad.price, 0);
+    return sum + (item.price + addonsTotal) * item.quantity;
+  }, 0);
 
   const handleSubmit = (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -349,9 +369,40 @@ export default function NewOrderModal({
 
                       {/* Total */}
                       <span className="text-xs font-bold font-mono text-slate-600">
-                        ₹{item.price * item.quantity}
+                        ₹{(item.price + (item.addons || []).reduce((s, ad) => s + ad.price, 0)) * item.quantity}
                       </span>
                     </div>
+
+                    {/* Addons List */}
+                    {(() => {
+                      const menuItem = menuItems.find((mi) => mi.id === item.menu_item_id);
+                      const availableAddons = menuItem?.addons || [];
+                      if (availableAddons.length === 0) return null;
+                      return (
+                        <div className="pt-2 border-t border-slate-100 space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Add-ons:</span>
+                          <div className="flex flex-col gap-1">
+                            {availableAddons.map((ad) => {
+                              const isSelected = (item.addons || []).some((a) => a.id === ad.id);
+                              return (
+                                <label key={ad.id} className="flex items-center justify-between text-xs text-slate-600 cursor-pointer select-none">
+                                  <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleCartItemAddon(item.menu_item_id, ad)}
+                                      className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-3.5 h-3.5"
+                                    />
+                                    <span>{ad.name}</span>
+                                  </div>
+                                  <span className="font-mono text-slate-405 font-bold">+₹{ad.price}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Note input */}
                     <input

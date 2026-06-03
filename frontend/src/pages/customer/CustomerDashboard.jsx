@@ -52,6 +52,7 @@ export default function CustomerDashboard() {
           price: item.price,
           quantity: 1,
           notes: '',
+          addons: [],
         },
       ];
     });
@@ -69,6 +70,22 @@ export default function CustomerDashboard() {
           return cartItem;
         })
         .filter(Boolean)
+    );
+  };
+
+  const toggleCartItemAddon = (itemId, addon) => {
+    setCart((prev) =>
+      prev.map((cartItem) => {
+        if (cartItem.menu_item_id === itemId) {
+          const currentAddons = cartItem.addons || [];
+          const exists = currentAddons.some((a) => a.id === addon.id);
+          const nextAddons = exists
+            ? currentAddons.filter((a) => a.id !== addon.id)
+            : [...currentAddons, addon];
+          return { ...cartItem, addons: nextAddons };
+        }
+        return cartItem;
+      })
     );
   };
 
@@ -705,15 +722,45 @@ export default function CustomerDashboard() {
                           placeholder="Instructions (e.g., extra spicy...)"
                           className="flex-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-650 focus:outline-none"
                         />
-                        <span className="text-xs font-mono font-bold text-slate-700">₹{item.price * item.quantity}</span>
+                        <span className="text-xs font-mono font-bold text-slate-700 font-mono">₹{(item.price + (item.addons || []).reduce((s, ad) => s + ad.price, 0)) * item.quantity}</span>
                       </div>
+                      
+                      {(() => {
+                        const menuItem = menuItems.find((mi) => mi.id === item.menu_item_id);
+                        const availableAddons = menuItem?.addons || [];
+                        if (availableAddons.length === 0) return null;
+                        return (
+                          <div className="mt-1 pl-2 border-l-2 border-slate-200 space-y-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Add-ons:</span>
+                            <div className="flex flex-col gap-1.5">
+                              {availableAddons.map((ad) => {
+                                const isSelected = (item.addons || []).some((a) => a.id === ad.id);
+                                return (
+                                  <label key={ad.id} className="flex items-center justify-between text-xs text-slate-650 cursor-pointer select-none">
+                                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => toggleCartItemAddon(item.menu_item_id, ad)}
+                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                                      />
+                                      <span>{ad.name}</span>
+                                    </div>
+                                    <span className="font-mono text-slate-450 font-bold">+₹{ad.price}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
 
                 <div className="flex justify-between items-center pt-3 border-t border-slate-100 font-bold text-sm text-emerald-950">
                   <span className="text-slate-500 font-medium">Basket Total</span>
-                  <span className="text-base font-bold font-mono text-emerald-600">₹{cart.reduce((sum, i) => sum + i.price * i.quantity, 0)}</span>
+                  <span className="text-base font-bold font-mono text-emerald-600">₹{cart.reduce((sum, i) => sum + (i.price + (i.addons || []).reduce((s, ad) => s + ad.price, 0)) * i.quantity, 0)}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -875,7 +922,7 @@ export default function CustomerDashboard() {
               <span className="text-[10px] text-emerald-450 font-bold block uppercase tracking-wider">
                 {cart.reduce((sum, i) => sum + i.quantity, 0)} {cart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? 'item' : 'items'} selected
               </span>
-              <span className="text-sm font-black font-mono">₹{cart.reduce((sum, i) => sum + i.price * i.quantity, 0)}</span>
+              <span className="text-sm font-black font-mono">₹{cart.reduce((sum, i) => sum + (i.price + (i.addons || []).reduce((s, ad) => s + ad.price, 0)) * i.quantity, 0)}</span>
             </div>
             <button
               onClick={() => setActiveTab('order')}
