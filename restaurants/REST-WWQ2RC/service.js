@@ -282,6 +282,7 @@ app.get('/health', (req, res) => {
     logout_redirect_url: config.logout_redirect_url || '',
     login_theme_color: config.login_theme_color || '#fafaf9',
     theme: config.qr_theme || 'classic',
+    billing: config.billing || {},
     uptime: process.uptime(),
   });
 });
@@ -1476,38 +1477,46 @@ app.post('/orders/:id/settle', authMiddleware('staff'), (req, res) => {
   const { payment_method, cash_amount, online_amount, discount_amount, coupon_code } = req.body;
   if (!payment_method) return res.status(400).json({ error: 'Payment method is required' });
 
-  let cashAmt = 0;
-  let onlineAmt = 0;
-  let finalTotal = order.total;
+  const config = readConfig();
+  const itemsTotalRow = db
+    .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
+    .get(req.params.id);
+  const rawTotal = itemsTotalRow.total || 0;
 
   // Recalculate or apply discount/coupon if passed during settlement
   let discAmt = parseFloat(discount_amount) || 0;
-  if (discAmt > 0 || coupon_code) {
-    const itemsTotalRow = db
-      .prepare('SELECT SUM(quantity * price) as total FROM order_items WHERE order_id = ?')
-      .get(req.params.id);
-    const rawTotal = itemsTotalRow.total || 0;
-    
-    // Check if coupon is passed
-    if (coupon_code) {
-      const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND active = 1').get(coupon_code.trim().toUpperCase());
-      if (coupon && rawTotal >= coupon.min_order_amount) {
-        if (coupon.discount_type === 'percentage') {
-          discAmt = (coupon.value / 100) * rawTotal;
-        } else {
-          discAmt = coupon.value;
-        }
+  if (coupon_code) {
+    const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND active = 1').get(coupon_code.trim().toUpperCase());
+    if (coupon && rawTotal >= coupon.min_order_amount) {
+      if (coupon.discount_type === 'percentage') {
+        discAmt = (coupon.value / 100) * rawTotal;
+      } else {
+        discAmt = coupon.value;
       }
     }
-    
-    finalTotal = Math.max(0, rawTotal - discAmt);
-    db.prepare('UPDATE orders SET total = ?, discount_amount = ?, coupon_code = ? WHERE id = ?').run(
-      finalTotal,
-      discAmt,
-      coupon_code || null,
-      req.params.id
-    );
+  } else {
+    discAmt = discAmt || order.discount_amount || 0;
   }
+
+  const taxableAmount = Math.max(0, rawTotal - discAmt);
+  const gstEnabled = config?.billing?.gst_enabled;
+  const gstPercent = config?.billing?.gst_percentage || 0;
+  const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+  const serviceChargePercent = config?.billing?.service_charge_percentage || 0;
+  const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+  const grandTotal = taxableAmount + gstAmount + serviceChargeAmount;
+
+  const finalTotal = grandTotal;
+
+  db.prepare('UPDATE orders SET total = ?, discount_amount = ?, coupon_code = ? WHERE id = ?').run(
+    finalTotal,
+    discAmt,
+    coupon_code || order.coupon_code || null,
+    req.params.id
+  );
+
+  let cashAmt = 0;
+  let onlineAmt = 0;
 
   if (payment_method === 'cash') {
     cashAmt = finalTotal;

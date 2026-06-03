@@ -8,6 +8,18 @@ import { useOrders } from '../../hooks/useOrders';
 import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
 
+const calculateTotalPayable = (order, discount, billingConfig) => {
+  if (!order) return 0;
+  const subtotal = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || order.total || 0;
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const gstEnabled = billingConfig?.gst_enabled;
+  const gstPercent = billingConfig?.gst_percentage || 0;
+  const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+  const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+  const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+  return taxableAmount + gstAmount + serviceChargeAmount;
+};
+
 export default function CashierDashboard() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
@@ -95,7 +107,7 @@ export default function CashierDashboard() {
   const activeOrder = orders.find(o => o.table_id === selectedTable?.id && o.status !== 'paid' && o.status !== 'cancelled');
   const checkoutRequests = orders.filter(o => o.payment_status === 'pending_payment' && o.status !== 'paid');
   const orderToSettle = activeOrder || checkoutRequests.find(o => o.table_id === selectedTable?.id);
-  const finalPayableTotal = (orderToSettle?.total || 0) - discountAmount;
+  const finalPayableTotal = calculateTotalPayable(orderToSettle, discountAmount, config?.billing);
 
   const handleTableTap = (table, order) => {
     const now = Date.now();
@@ -181,18 +193,31 @@ export default function CashierDashboard() {
   useEffect(() => {
     if (settleModalOpen && orderToSettle) {
       setWhatsappPhone(orderToSettle.customer_phone || '');
-      setCashAmount(orderToSettle.total - (orderToSettle.discount_amount || 0));
-      setOnlineAmount(0);
-      setDiscountAmount(orderToSettle.discount_amount || 0);
+      const initialDiscount = orderToSettle.discount_amount || 0;
+      setDiscountAmount(initialDiscount);
       setCouponCode(orderToSettle.coupon_code || '');
-      setSettleMethod(normalizeMethod(orderToSettle.payment_method));
+      const finalAmt = calculateTotalPayable(orderToSettle, initialDiscount, config?.billing);
+      const normalized = normalizeMethod(orderToSettle.payment_method);
+      setSettleMethod(normalized);
+      if (normalized === 'cash') {
+        setCashAmount(finalAmt);
+        setOnlineAmount(0);
+      } else if (normalized === 'upi') {
+        setCashAmount(0);
+        setOnlineAmount(finalAmt);
+      } else if (normalized === 'split') {
+        const ca = orderToSettle.cash_amount !== undefined && orderToSettle.cash_amount !== null && orderToSettle.cash_amount > 0 ? orderToSettle.cash_amount : finalAmt / 2;
+        const oa = orderToSettle.online_amount !== undefined && orderToSettle.online_amount !== null && orderToSettle.online_amount > 0 ? orderToSettle.online_amount : finalAmt / 2;
+        setCashAmount(ca);
+        setOnlineAmount(oa);
+      }
     }
-  }, [settleModalOpen, orderToSettle]);
+  }, [settleModalOpen, orderToSettle, config]);
 
   // Sync UPI QR generation
   useEffect(() => {
     if (!settleModalOpen || !orderToSettle) return;
-    const finalPayable = orderToSettle.total - discountAmount;
+    const finalPayable = calculateTotalPayable(orderToSettle, discountAmount, config?.billing);
     const qrAmt = settleMethod === 'split' ? onlineAmount : finalPayable;
 
     if ((settleMethod === 'upi' || settleMethod === 'split') && qrAmt > 0) {
@@ -212,7 +237,7 @@ export default function CashierDashboard() {
     } else {
       setUpiQrBase64('');
     }
-  }, [settleMethod, onlineAmount, settleModalOpen, discountAmount, orderToSettle]);
+  }, [settleMethod, onlineAmount, settleModalOpen, discountAmount, orderToSettle, config]);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim() || !orderToSettle) return;
@@ -225,7 +250,7 @@ export default function CashierDashboard() {
       });
       if (data.valid) {
         setDiscountAmount(data.discount_amount);
-        const newTotal = orderToSettle.total - data.discount_amount;
+        const newTotal = calculateTotalPayable(orderToSettle, data.discount_amount, config?.billing);
         if (settleMethod === 'cash' || settleMethod === 'upi') {
           setCashAmount(settleMethod === 'cash' ? newTotal : 0);
           setOnlineAmount(settleMethod === 'upi' ? newTotal : 0);
@@ -248,14 +273,14 @@ export default function CashierDashboard() {
 
   const handleCashAmountChange = (val) => {
     const cash = parseFloat(val) || 0;
-    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, config?.billing);
     setCashAmount(cash);
     setOnlineAmount(Math.max(0, finalTotal - cash));
   };
 
   const handleOnlineAmountChange = (val) => {
     const online = parseFloat(val) || 0;
-    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, config?.billing);
     setOnlineAmount(online);
     setCashAmount(Math.max(0, finalTotal - online));
   };
@@ -299,7 +324,7 @@ export default function CashierDashboard() {
 
   const handleSettleOrder = async () => {
     if (!orderToSettle) return;
-    const finalTotal = orderToSettle.total - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, config?.billing);
 
     if (settleMethod === 'split') {
       if (Math.abs(parseFloat(cashAmount) + parseFloat(onlineAmount) - finalTotal) > 0.05) {

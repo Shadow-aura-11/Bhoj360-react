@@ -12,6 +12,18 @@ import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
 import { format, differenceInMinutes, parseISO } from 'date-fns';
 
+const calculateTotalPayable = (order, discount, billingConfig) => {
+  if (!order) return 0;
+  const subtotal = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || order.total || 0;
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const gstEnabled = billingConfig?.gst_enabled;
+  const gstPercent = billingConfig?.gst_percentage || 0;
+  const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+  const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+  const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+  return taxableAmount + gstAmount + serviceChargeAmount;
+};
+
 export default function WaiterDashboard() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
@@ -184,7 +196,7 @@ export default function WaiterDashboard() {
   );
 
   const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
-  const finalPayableTotal = (orderToSettle?.total || 0) - discountAmount;
+  const finalPayableTotal = calculateTotalPayable(orderToSettle, discountAmount, restaurantConfig?.billing);
 
   // Find today's reservation within 60 min for selected table
   const nextReservation = reservations.find((r) => {
@@ -235,9 +247,10 @@ export default function WaiterDashboard() {
   useEffect(() => {
     if (settleModalOpen && orderToSettle) {
       setWhatsappPhone(orderToSettle.customer_phone || '');
-      setDiscountAmount(orderToSettle.discount_amount || 0);
+      const initialDiscount = orderToSettle.discount_amount || 0;
+      setDiscountAmount(initialDiscount);
       setCouponCode(orderToSettle.coupon_code || '');
-      const finalAmt = orderToSettle.total - (orderToSettle.discount_amount || 0);
+      const finalAmt = calculateTotalPayable(orderToSettle, initialDiscount, restaurantConfig?.billing);
       const normalized = normalizeMethod(orderToSettle.payment_method);
       setSettleMethod(normalized);
       if (normalized === 'cash') {
@@ -247,13 +260,13 @@ export default function WaiterDashboard() {
         setCashAmount(0);
         setOnlineAmount(finalAmt);
       } else if (normalized === 'split') {
-        const ca = orderToSettle.cash_amount !== undefined ? orderToSettle.cash_amount : finalAmt / 2;
-        const oa = orderToSettle.online_amount !== undefined ? orderToSettle.online_amount : finalAmt / 2;
+        const ca = orderToSettle.cash_amount !== undefined && orderToSettle.cash_amount !== null && orderToSettle.cash_amount > 0 ? orderToSettle.cash_amount : finalAmt / 2;
+        const oa = orderToSettle.online_amount !== undefined && orderToSettle.online_amount !== null && orderToSettle.online_amount > 0 ? orderToSettle.online_amount : finalAmt / 2;
         setCashAmount(ca);
         setOnlineAmount(oa);
       }
     }
-  }, [settleModalOpen, orderToSettle]);
+  }, [settleModalOpen, orderToSettle, restaurantConfig]);
 
   // Dynamic UPI QR Code generator trigger
   useEffect(() => {
@@ -261,7 +274,7 @@ export default function WaiterDashboard() {
     const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
     if (!orderToSettle) return;
 
-    const finalPayable = orderToSettle.total - discountAmount;
+    const finalPayable = calculateTotalPayable(orderToSettle, discountAmount, restaurantConfig?.billing);
     const qrAmt = settleMethod === 'split' ? onlineAmount : finalPayable;
 
     if ((settleMethod === 'upi' || settleMethod === 'split') && qrAmt > 0) {
@@ -281,7 +294,7 @@ export default function WaiterDashboard() {
     } else {
       setUpiQrBase64('');
     }
-  }, [settleMethod, onlineAmount, settleModalOpen, discountAmount]);
+  }, [settleMethod, onlineAmount, settleModalOpen, discountAmount, restaurantConfig]);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -296,7 +309,7 @@ export default function WaiterDashboard() {
       });
       if (data.valid) {
         setDiscountAmount(data.discount_amount);
-        const newTotal = orderToSettle.total - data.discount_amount;
+        const newTotal = calculateTotalPayable(orderToSettle, data.discount_amount, restaurantConfig?.billing);
         if (settleMethod === 'cash' || settleMethod === 'upi') {
           setCashAmount(settleMethod === 'cash' ? newTotal : 0);
           setOnlineAmount(settleMethod === 'upi' ? newTotal : 0);
@@ -320,7 +333,7 @@ export default function WaiterDashboard() {
   const handleCashAmountChange = (val) => {
     const cash = parseFloat(val) || 0;
     const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
-    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, restaurantConfig?.billing);
     setCashAmount(cash);
     setOnlineAmount(Math.max(0, finalTotal - cash));
   };
@@ -328,7 +341,7 @@ export default function WaiterDashboard() {
   const handleOnlineAmountChange = (val) => {
     const online = parseFloat(val) || 0;
     const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
-    const finalTotal = (orderToSettle?.total || 0) - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, restaurantConfig?.billing);
     setOnlineAmount(online);
     setCashAmount(Math.max(0, finalTotal - online));
   };
@@ -337,7 +350,7 @@ export default function WaiterDashboard() {
     const orderToSettle = activeOrder || (modalTable ? orders.find(o => o.table_id === modalTable.id && o.status !== 'paid' && o.status !== 'cancelled') : null);
     if (!orderToSettle) return;
 
-    const finalTotal = orderToSettle.total - discountAmount;
+    const finalTotal = calculateTotalPayable(orderToSettle, discountAmount, restaurantConfig?.billing);
     
     if (settleMethod === 'split') {
       if (Math.abs(parseFloat(cashAmount) + parseFloat(onlineAmount) - finalTotal) > 0.05) {

@@ -33,6 +33,7 @@ export default function CustomerDashboard() {
   const [restaurantName, setRestaurantName] = useState('Restaurant');
   const [logoutRedirectUrl, setLogoutRedirectUrl] = useState('');
   const [theme, setTheme] = useState('classic');
+  const [billingConfig, setBillingConfig] = useState(null);
 
   const addToCart = (item) => {
     setCart((prev) => {
@@ -150,6 +151,7 @@ export default function CustomerDashboard() {
           if (health.logout_redirect_url) setLogoutRedirectUrl(health.logout_redirect_url);
           if (health.google_review_url) setGoogleReviewUrl(health.google_review_url);
           if (health.theme) setTheme(health.theme);
+          if (health.billing) setBillingConfig(health.billing);
         }
       } catch (err) {
         console.error(err);
@@ -470,7 +472,21 @@ export default function CustomerDashboard() {
     }
   };
 
-  const style = themeStyles[theme] || themeStyles.classic;
+  const getCustomerCalculatedTotal = () => {
+    if (!activeOrder) return { subtotal: 0, discount: 0, taxableAmount: 0, gstAmount: 0, serviceChargeAmount: 0, grandTotal: 0 };
+    const subtotal = activeOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || activeOrder.total || 0;
+    const discount = activeOrder.discount_amount || 0;
+    const taxableAmount = Math.max(0, subtotal - discount);
+    const gstEnabled = billingConfig?.gst_enabled;
+    const gstPercent = billingConfig?.gst_percentage || 0;
+    const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+    const serviceChargePercent = billingConfig?.service_charge_percentage || 0;
+    const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+    const grandTotal = taxableAmount + gstAmount + serviceChargeAmount;
+    return { subtotal, discount, taxableAmount, gstAmount, serviceChargeAmount, grandTotal };
+  };
+
+  const { subtotal, discount, taxableAmount, gstAmount, serviceChargeAmount, grandTotal } = getCustomerCalculatedTotal();
 
   return (
     <div className="min-h-screen theme-bg-color theme-text-color flex flex-col font-body">
@@ -807,9 +823,33 @@ export default function CustomerDashboard() {
                   ))}
                 </div>
 
-                <div className="flex justify-between items-center pt-3 border-t border-slate-100 font-bold text-sm text-emerald-950">
-                  <span className="text-slate-500">Total Seated Amount</span>
-                  <span className="text-base font-bold font-mono text-emerald-600">₹{activeOrder.total}</span>
+                <div className="space-y-1.5 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Discount:</span>
+                      <span className="font-mono">-₹{discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {gstAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>GST ({billingConfig?.gst_percentage || 0}%):</span>
+                      <span className="font-mono">₹{gstAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {serviceChargeAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Service Charge ({billingConfig?.service_charge_percentage || 0}%):</span>
+                      <span className="font-mono">₹{serviceChargeAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-200 font-bold text-sm text-emerald-950">
+                    <span>Total Seated Amount</span>
+                    <span className="text-base font-bold font-mono text-emerald-605">₹{grandTotal.toFixed(2)}</span>
+                  </div>
                 </div>
 
                 {/* Settle / Pay Bill Option */}
@@ -874,11 +914,40 @@ export default function CustomerDashboard() {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="font-display font-black text-xl text-emerald-950">Select Payment Method</h3>
-                <p className="text-xs text-slate-400 mt-1">Order Total: ₹{activeOrder?.total}</p>
               </div>
               <button onClick={() => setPayModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Bill Details Breakdown */}
+            <div className="space-y-1.5 border-b border-slate-100 pb-3 text-xs text-slate-600">
+              <div className="flex justify-between">
+                <span>Items Subtotal:</span>
+                <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Discount:</span>
+                  <span className="font-mono">-₹{discount.toFixed(2)}</span>
+                </div>
+              )}
+              {gstAmount > 0 && (
+                <div className="flex justify-between">
+                  <span>GST ({billingConfig?.gst_percentage || 0}%):</span>
+                  <span className="font-mono">₹{gstAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {serviceChargeAmount > 0 && (
+                <div className="flex justify-between">
+                  <span>Service Charge ({billingConfig?.service_charge_percentage || 0}%):</span>
+                  <span className="font-mono">₹{serviceChargeAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-slate-800 pt-1 border-t border-dashed border-slate-200">
+                <span>Grand Total:</span>
+                <span className="font-mono text-emerald-705">₹{grandTotal.toFixed(2)}</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
