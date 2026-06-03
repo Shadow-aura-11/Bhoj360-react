@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: process.env.GITHUB_PAGES === 'true' ? '/bhoj360/' : '/',
+  base: process.env.GITHUB_PAGES === 'true' ? '/Bhoj360-react/' : '/',
   plugins: [react()],
   server: {
     port: 5173,
