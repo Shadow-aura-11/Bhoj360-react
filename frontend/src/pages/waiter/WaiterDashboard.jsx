@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw, VolumeX, Smartphone } from 'lucide-react';
+import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw, VolumeX, Smartphone, Download } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -698,6 +698,18 @@ export default function WaiterDashboard() {
             {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             <span className="hidden sm:inline">{speechEnabled ? "Speech On" : "Speech Off"}</span>
           </button>
+
+          {/* PWA Install Button */}
+          {!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone && (
+            <button
+              onClick={() => installPrompt ? handleInstall() : toast('To install: tap browser menu ⋮ → "Install app" or "Add to Home Screen"', { duration: 6000, icon: '📲' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition-all shadow-xs"
+              title={`Install ${restaurantName} Waiter App`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
 
           <button
             onClick={handleLogout}

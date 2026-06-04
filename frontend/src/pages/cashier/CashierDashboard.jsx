@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Landmark, Users, ShoppingCart, CheckSquare, Printer, Check, DollarSign, History, Volume2, LogOut, Plus, X, Gift, Send, RefreshCw, Smartphone } from 'lucide-react';
+import { Landmark, Users, ShoppingCart, CheckSquare, Printer, Check, DollarSign, History, Volume2, LogOut, Plus, X, Gift, Send, RefreshCw, Smartphone, Download } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -726,6 +726,18 @@ export default function CashierDashboard() {
               {isConnected ? 'Linked' : 'Offline'}
             </span>
           </div>
+
+          {/* PWA Install Button */}
+          {!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone && (
+            <button
+              onClick={() => installPrompt ? handleInstall() : toast('To install: tap browser menu ⋮ → "Install app" or "Add to Home Screen"', { duration: 6000, icon: '📲' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl text-xs font-bold transition-all shadow-xs"
+              title={`Install ${restaurantName} Cashier App`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
 
           <button
             onClick={handleLogout}

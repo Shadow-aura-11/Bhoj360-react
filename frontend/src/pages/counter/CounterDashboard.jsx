@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock, VolumeX, Smartphone } from 'lucide-react';
+import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock, VolumeX, Smartphone, Download } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -398,6 +398,18 @@ export default function CounterDashboard() {
             {speechEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             <span className="hidden sm:inline">{speechEnabled ? "Speech On" : "Speech Off"}</span>
           </button>
+
+          {/* PWA Install Button */}
+          {!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone && (
+            <button
+              onClick={() => installPrompt ? handleInstall() : toast('To install: tap browser menu ⋮ → "Install app" or "Add to Home Screen"', { duration: 6000, icon: '📲' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all shadow-xs"
+              title={`Install ${restaurantName} Kitchen App`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
 
           <button
             onClick={handleLogout}
