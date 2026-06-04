@@ -12,6 +12,7 @@ export default function QRPrintPage() {
   const api = createApi(restaurantId);
   const [tables, setTables] = useState([]);
   const [qrs, setQrs] = useState({});
+  const [selectedTableIds, setSelectedTableIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [zipping, setZipping] = useState(false);
 
@@ -21,6 +22,7 @@ export default function QRPrintPage() {
         setLoading(true);
         const { data } = await api.get('/tables');
         setTables(data);
+        setSelectedTableIds(data.map((table) => table.id));
         
         // Fetch all QR codes in parallel
         const origin = window.location.origin + window.location.pathname.split('/r/')[0];
@@ -56,10 +58,15 @@ export default function QRPrintPage() {
 
   const handleDownloadAllZip = async () => {
     try {
+      const tablesToDownload = tables.filter(t => selectedTableIds.includes(t.id));
+      if (tablesToDownload.length === 0) {
+        toast.error('No tables selected to download!');
+        return;
+      }
       setZipping(true);
       const zip = new JSZip();
       
-      tables.forEach((table) => {
+      tablesToDownload.forEach((table) => {
         const qrObj = qrs[table.id];
         if (qrObj && qrObj.qr) {
           // Remove the data uri prefix: "data:image/png;base64,"
@@ -69,8 +76,8 @@ export default function QRPrintPage() {
       });
       
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, `restaurant-${restaurantId}-tables-qrs.zip`);
-      toast.success('All QR Codes packaged and downloaded successfully!');
+      saveAs(content, `restaurant-${restaurantId}-selected-tables-qrs.zip`);
+      toast.success(`${tablesToDownload.length} QR Codes packaged and downloaded successfully!`);
     } catch (err) {
       console.error(err);
       toast.error('Failed to generate ZIP archive');
@@ -93,26 +100,45 @@ export default function QRPrintPage() {
           <div>
             <h1 className="text-2xl font-bold font-display text-slate-100">Print Table QR Codes</h1>
             <p className="text-xs text-slate-400 mt-0.5">Generate printable layouts for customer ordering tables</p>
+            {!loading && tables.length > 0 && (
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={() => setSelectedTableIds(tables.map(t => t.id))}
+                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
+                >
+                  Select All ({tables.length})
+                </button>
+                <button
+                  onClick={() => setSelectedTableIds([])}
+                  className="text-[10px] font-bold text-slate-400 hover:text-slate-300 transition-colors uppercase tracking-wider bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-700/30"
+                >
+                  Deselect All
+                </button>
+                <span className="text-[11px] text-slate-505 font-semibold font-sans">
+                  Selected: <strong className="text-slate-300">{selectedTableIds.length}</strong>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={handleDownloadAllZip}
-            disabled={loading || zipping}
+            disabled={loading || zipping || selectedTableIds.length === 0}
             className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700/80 rounded-xl text-sm font-semibold border border-slate-700/50 flex items-center gap-2 transition-all disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{zipping ? 'Packaging ZIP...' : 'Download ZIP'}</span>
+            <span>{zipping ? 'Packaging ZIP...' : `Download ZIP (${selectedTableIds.length})`}</span>
           </button>
           
           <button
             onClick={handlePrint}
-            disabled={loading}
+            disabled={loading || selectedTableIds.length === 0}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-indigo-600/20 disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            <span>Print QR Cards</span>
+            <span>Print QR Cards ({selectedTableIds.length})</span>
           </button>
         </div>
       </div>
@@ -127,11 +153,33 @@ export default function QRPrintPage() {
         <div className="print-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {tables.map((table) => {
             const qrObj = qrs[table.id];
+            const isSelected = selectedTableIds.includes(table.id);
             return (
               <div
                 key={table.id}
-                className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col items-center text-center text-slate-950 shadow-md break-inside-avoid print:shadow-none print:border-slate-300"
+                onClick={() => {
+                  setSelectedTableIds(prev =>
+                    prev.includes(table.id)
+                      ? prev.filter(id => id !== table.id)
+                      : [...prev, table.id]
+                  );
+                }}
+                className={`bg-white border border-slate-200 rounded-2xl p-6 flex flex-col items-center text-center text-slate-950 shadow-md break-inside-avoid print:shadow-none print:border-slate-300 cursor-pointer transition-all relative select-none ${
+                  !isSelected 
+                    ? 'no-print opacity-30 bg-slate-900/10 border-dashed border-slate-700 hover:opacity-55' 
+                    : 'hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/5'
+                }`}
               >
+                {/* On-screen checkbox */}
+                <div className="absolute top-4 right-4 no-print">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}}
+                    className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer pointer-events-none"
+                  />
+                </div>
+
                 <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
                   ORDER FROM YOUR TABLE
                 </span>
@@ -158,12 +206,6 @@ export default function QRPrintPage() {
                 <div className="text-[10px] font-semibold text-slate-400 uppercase mb-2">
                   Scan QR code with your phone
                 </div>
-                
-                <div className="w-full h-px bg-slate-200/80 mb-3" />
-                
-                <span className="text-[9px] font-mono text-slate-400 truncate max-w-full px-2 select-all">
-                  {qrObj ? qrObj.url : ''}
-                </span>
               </div>
             );
           })}
