@@ -6,6 +6,33 @@ import toast from 'react-hot-toast';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
+const sizeConfigs = {
+  small: {
+    cardClass: 'p-4 max-w-[200px] min-h-[250px]',
+    imgSize: 'w-[120px] h-[120px] print:w-[100px] print:h-[100px]',
+    titleClass: 'text-lg',
+    subClass: 'text-[8.5px]',
+    gridClass: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-6xl',
+    printGridCols: '4'
+  },
+  medium: {
+    cardClass: 'p-6 max-w-[280px] min-h-[360px]',
+    imgSize: 'w-[180px] h-[180px] print:w-[160px] print:h-[160px]',
+    titleClass: 'text-2xl',
+    subClass: 'text-[10px]',
+    gridClass: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 max-w-5xl',
+    printGridCols: '3'
+  },
+  large: {
+    cardClass: 'p-8 max-w-[360px] min-h-[460px]',
+    imgSize: 'w-[240px] h-[240px] print:w-[220px] print:h-[220px]',
+    titleClass: 'text-3xl',
+    subClass: 'text-xs',
+    gridClass: 'grid-cols-1 sm:grid-cols-2 max-w-4xl',
+    printGridCols: '2'
+  }
+};
+
 export default function QRPrintPage() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
@@ -13,6 +40,7 @@ export default function QRPrintPage() {
   const [tables, setTables] = useState([]);
   const [qrs, setQrs] = useState({});
   const [selectedTableIds, setSelectedTableIds] = useState([]);
+  const [qrSize, setQrSize] = useState('medium'); // 'small' | 'medium' | 'large'
   const [loading, setLoading] = useState(true);
   const [zipping, setZipping] = useState(false);
 
@@ -86,8 +114,20 @@ export default function QRPrintPage() {
     }
   };
 
+  const cfg = sizeConfigs[qrSize];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-body">
+      {/* Dynamic Style Override for Print Grid columns */}
+      <style>{`
+        @media print {
+          .print-grid {
+            grid-template-columns: repeat(${cfg.printGridCols}, 1fr) !important;
+            gap: 1.5rem !important;
+          }
+        }
+      `}</style>
+
       {/* Top Header Control - Hidden in Print */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 pb-5 border-b border-slate-800 no-print">
         <div className="flex items-center gap-3">
@@ -101,20 +141,43 @@ export default function QRPrintPage() {
             <h1 className="text-2xl font-bold font-display text-slate-100">Print Table QR Codes</h1>
             <p className="text-xs text-slate-400 mt-0.5">Generate printable layouts for customer ordering tables</p>
             {!loading && tables.length > 0 && (
-              <div className="flex items-center gap-3 mt-3">
-                <button
-                  onClick={() => setSelectedTableIds(tables.map(t => t.id))}
-                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
-                >
-                  Select All ({tables.length})
-                </button>
-                <button
-                  onClick={() => setSelectedTableIds([])}
-                  className="text-[10px] font-bold text-slate-400 hover:text-slate-300 transition-colors uppercase tracking-wider bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-700/30"
-                >
-                  Deselect All
-                </button>
-                <span className="text-[11px] text-slate-505 font-semibold font-sans">
+              <div className="flex flex-wrap items-center gap-4 mt-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedTableIds(tables.map(t => t.id))}
+                    className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
+                  >
+                    Select All ({tables.length})
+                  </button>
+                  <button
+                    onClick={() => setSelectedTableIds([])}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-300 transition-colors uppercase tracking-wider bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-700/30"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+                
+                <div className="w-px h-4 bg-slate-800 hidden sm:block" />
+
+                {/* Sizing Controller */}
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                  <span className="text-[9px] text-slate-500 font-bold uppercase px-2">Size:</span>
+                  {['small', 'medium', 'large'].map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => setQrSize(sz)}
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                        qrSize === sz
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="text-[11px] text-slate-550 font-semibold font-sans">
                   Selected: <strong className="text-slate-300">{selectedTableIds.length}</strong>
                 </span>
               </div>
@@ -150,7 +213,7 @@ export default function QRPrintPage() {
         </div>
       ) : (
         /* Print Layout Grid */
-        <div className="print-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className={`print-grid grid gap-6 mx-auto ${cfg.gridClass}`}>
           {tables.map((table) => {
             const qrObj = qrs[table.id];
             const isSelected = selectedTableIds.includes(table.id);
@@ -164,14 +227,14 @@ export default function QRPrintPage() {
                       : [...prev, table.id]
                   );
                 }}
-                className={`bg-white border border-slate-200 rounded-2xl p-6 flex flex-col items-center text-center text-slate-950 shadow-md break-inside-avoid print:shadow-none print:border-slate-300 cursor-pointer transition-all relative select-none ${
+                className={`bg-white border border-slate-205 rounded-2xl mx-auto w-full flex flex-col items-center text-center text-slate-950 shadow-md break-inside-avoid print:shadow-none print:border-slate-300 cursor-pointer transition-all relative select-none ${cfg.cardClass} ${
                   !isSelected 
                     ? 'no-print opacity-30 bg-slate-900/10 border-dashed border-slate-700 hover:opacity-55' 
                     : 'hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/5'
                 }`}
               >
                 {/* On-screen checkbox */}
-                <div className="absolute top-4 right-4 no-print">
+                <div className="absolute top-3 right-3 no-print">
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -184,7 +247,7 @@ export default function QRPrintPage() {
                   ORDER FROM YOUR TABLE
                 </span>
                 
-                <h2 className="text-2xl font-black font-display tracking-tight text-slate-900 mb-4">
+                <h2 className={`${cfg.titleClass} font-black font-display tracking-tight text-slate-900 mb-4`}>
                   TABLE {table.number}
                 </h2>
                 
@@ -194,7 +257,7 @@ export default function QRPrintPage() {
                     <img
                       src={qrObj.qr}
                       alt={`Table ${table.number} QR`}
-                      className="w-[180px] h-[180px] print:w-[160px] print:h-[160px]"
+                      className={`${cfg.imgSize}`}
                     />
                   ) : (
                     <div className="w-[180px] h-[180px] flex items-center justify-center text-slate-400 text-xs bg-slate-100 rounded">
@@ -203,7 +266,7 @@ export default function QRPrintPage() {
                   )}
                 </div>
 
-                <div className="text-[10px] font-semibold text-slate-400 uppercase mb-2">
+                <div className={`${cfg.subClass} font-semibold text-slate-400 uppercase mb-2`}>
                   Scan QR code with your phone
                 </div>
               </div>
