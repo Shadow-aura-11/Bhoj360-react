@@ -183,16 +183,29 @@ export default function WaiterDashboard() {
     fetchRestaurantConfig();
   }, []);
 
-  // Trigger print when printOrder is set
+  // Trigger print when printOrder is set (KOT)
   useEffect(() => {
     if (printOrder) {
+      setReceiptOrder(null); // Ensure receipt is not in DOM
       const timer = setTimeout(() => {
         window.print();
         setPrintOrder(null);
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [printOrder]);
+
+  // Trigger print when receiptOrder is set (Bill Receipt)
+  useEffect(() => {
+    if (receiptOrder) {
+      setPrintOrder(null); // Ensure KOT is not in DOM
+      const timer = setTimeout(() => {
+        window.print();
+        setReceiptOrder(null);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [receiptOrder]);
 
   // Sync Settle modal states
   useEffect(() => {
@@ -310,9 +323,6 @@ export default function WaiterDashboard() {
 
   const handlePrintReceipt = (order) => {
     setReceiptOrder(order);
-    setTimeout(() => {
-      window.print();
-    }, 200);
   };
 
   const handleSettleOrder = async () => {
@@ -351,11 +361,6 @@ export default function WaiterDashboard() {
       setSelectedTable(null);
       refreshOrders();
       refreshTables();
-
-      // Trigger automatic printing after a short delay
-      setTimeout(() => {
-        window.print();
-      }, 500);
     } catch (err) {
       console.error(err);
       toast.error('Failed to settle order');
@@ -1558,14 +1563,12 @@ export default function WaiterDashboard() {
           display: none;
         }
         @media print {
-          /* Hide everything except the visible print section */
+          /* Hide everything except the active print section */
           body * {
             visibility: hidden;
           }
+          ${printOrder ? `
           #print-kot-section, #print-kot-section * {
-            visibility: visible;
-          }
-          #print-receipt-section, #print-receipt-section * {
             visibility: visible;
           }
           #print-kot-section {
@@ -1582,6 +1585,11 @@ export default function WaiterDashboard() {
             line-height: 1.3 !important;
             box-sizing: border-box !important;
           }
+          ` : ''}
+          ${receiptOrder ? `
+          #print-receipt-section, #print-receipt-section * {
+            visibility: visible;
+          }
           #print-receipt-section {
             display: block !important;
             position: absolute;
@@ -1596,6 +1604,7 @@ export default function WaiterDashboard() {
             line-height: 1.3 !important;
             box-sizing: border-box;
           }
+          ` : ''}
           @page {
             size: ${printerSettings.size === '58mm' ? '58mm' : '80mm'} auto;
             margin: 0;
@@ -1802,20 +1811,36 @@ export default function WaiterDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {printOrder.items && printOrder.items.map((item) => (
-                    <tr key={item.id} className="align-top">
-                      <td className="py-0.5 text-[11px]">
-                        {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
-                        {item.item_name}
-                        {item.notes && (
-                          <div className="text-[9px] italic pl-2">
-                            * Note: {item.notes}
-                          </div>
+                  {printOrder.items && printOrder.items.map((item) => {
+                    const itemAddons = item.addons || (item.addons_json ? (() => {
+                      try { return JSON.parse(item.addons_json); } catch (e) { return []; }
+                    })() : []);
+                    return (
+                      <React.Fragment key={item.id}>
+                        <tr className="align-top">
+                          <td className="py-0.5 text-[11px]">
+                            {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
+                            {item.item_name}
+                            {item.notes && (
+                              <div className="text-[9px] italic pl-2">
+                                * Note: {item.notes}
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
+                        </tr>
+                        {itemAddons && itemAddons.length > 0 && (
+                          <tr>
+                            <td colSpan="2" className="pl-3 text-[9px] text-slate-500 italic pb-1" style={{ paddingLeft: '8px' }}>
+                              {itemAddons.map((ad, idx) => (
+                                <div key={idx}>+ {ad.name}</div>
+                              ))}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
-                    </tr>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
               {printOrder.notes && (

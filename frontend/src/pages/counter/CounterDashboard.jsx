@@ -616,20 +616,36 @@ export default function CounterDashboard() {
               </tr>
             </thead>
             <tbody>
-              {printOrder.items && printOrder.items.map((item) => (
-                <tr key={item.id} className="align-top">
-                  <td className="py-0.5 text-[11px]">
-                    {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
-                    {item.item_name}
-                    {item.notes && (
-                      <div className="text-[9px] italic pl-2">
-                        * Note: {item.notes}
-                      </div>
+              {printOrder.items && printOrder.items.map((item) => {
+                const itemAddons = item.addons || (item.addons_json ? (() => {
+                  try { return JSON.parse(item.addons_json); } catch (e) { return []; }
+                })() : []);
+                return (
+                  <React.Fragment key={item.id}>
+                    <tr className="align-top">
+                      <td className="py-0.5 text-[11px]">
+                        {item.is_addon ? <span className="font-bold mr-1">(Add-on)</span> : ''}
+                        {item.item_name}
+                        {item.notes && (
+                          <div className="text-[9px] italic pl-2">
+                            * Note: {item.notes}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
+                    </tr>
+                    {itemAddons && itemAddons.length > 0 && (
+                      <tr>
+                        <td colSpan="2" className="pl-3 text-[9px] text-slate-500 italic pb-1" style={{ paddingLeft: '8px' }}>
+                          {itemAddons.map((ad, idx) => (
+                            <div key={idx}>+ {ad.name}</div>
+                          ))}
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="text-right py-0.5 text-[11px]">x{item.quantity}</td>
-                </tr>
-              ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
 
