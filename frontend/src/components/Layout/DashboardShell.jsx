@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, Wifi, WifiOff, Smartphone } from 'lucide-react';
+import { Menu, LogOut, Wifi, WifiOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createApi } from '../../api/client';
 import Sidebar from './Sidebar';
 import { usePWA } from '../../hooks/usePWA';
+import PWAInstallBanner from '../PWAInstallBanner';
 import toast from 'react-hot-toast';
 
 export default function DashboardShell({
@@ -20,15 +21,16 @@ export default function DashboardShell({
   const navigate = useNavigate();
   const api = createApi(restaurantId);
 
-  const { installPrompt, handleInstall } = usePWA(restaurantName, 'Admin Portal', logoUrl);
+  const roleLabel = role === 'admin' ? 'Admin Portal' : role === 'waiter' ? 'Waiter App' : role === 'counter' ? 'Kitchen Display' : role === 'cashier' ? 'Cashier Terminal' : 'Staff App';
+  const { installPrompt, handleInstall } = usePWA(restaurantName, roleLabel, logoUrl);
 
   useEffect(() => {
     if (installPrompt) {
       toast((t) => (
         <div className="flex items-center justify-between gap-3 text-slate-800 w-full">
           <div className="flex flex-col gap-0.5 text-left">
-            <span className="font-bold text-xs text-indigo-600">Install Admin App</span>
-            <span className="text-[10px] text-slate-500">Install for persistent login & fast dashboard access</span>
+            <span className="font-bold text-xs text-indigo-600">Install {roleLabel}</span>
+            <span className="text-[10px] text-slate-500">Install for persistent login & instant {restaurantName} access</span>
           </div>
           <button
             onClick={() => {
@@ -160,23 +162,13 @@ export default function DashboardShell({
           </div>
         </header>
 
-        {/* PWA Install Banner */}
-        {installPrompt && (
-          <div className="bg-indigo-600 text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-inner no-print flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4" />
-              <span>Install the <strong>{restaurantName} Admin App</strong> on your device for quick dashboard access!</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleInstall}
-                className="bg-white text-indigo-700 px-3.5 py-1 rounded-lg hover:bg-slate-100 transition-all font-bold shadow-sm"
-              >
-                Install App
-              </button>
-            </div>
-          </div>
-        )}
+        {/* PWA Install Banner — shown after login */}
+        <PWAInstallBanner
+          role={role}
+          restaurantName={restaurantName}
+          installPrompt={installPrompt}
+          handleInstall={handleInstall}
+        />
 
         {/* Content Body */}
         <main className="flex-1 p-6 md:p-8 animate-fade-in relative z-10">

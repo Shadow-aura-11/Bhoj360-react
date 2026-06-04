@@ -10,6 +10,7 @@ import OrderCard from '../../components/Orders/OrderCard';
 import toast from 'react-hot-toast';
 import { parseOrderDate } from '../../utils/date';
 import { usePWA } from '../../hooks/usePWA';
+import PWAInstallBanner from '../../components/PWAInstallBanner';
 
 export default function CounterDashboard() {
   const { restaurantId } = useParams();
@@ -345,22 +346,12 @@ export default function CounterDashboard() {
   return (
     <div className="min-h-screen bg-rose-50/20 text-slate-800 flex flex-col font-body">
       {/* PWA Install Banner */}
-      {installPrompt && (
-        <div className="bg-rose-650 text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-inner no-print flex-shrink-0" style={{ backgroundColor: '#be123c' }}>
-          <div className="flex items-center gap-2">
-            <Smartphone className="w-4 h-4" />
-            <span>Install the <strong>{restaurantName} Kitchen App</strong> on your device for quick access!</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleInstall}
-              className="bg-white text-rose-700 px-3.5 py-1 rounded-lg hover:bg-slate-100 transition-all font-bold shadow-sm"
-            >
-              Install App
-            </button>
-          </div>
-        </div>
-      )}
+      <PWAInstallBanner
+        role="counter"
+        restaurantName={restaurantName}
+        installPrompt={installPrompt}
+        handleInstall={handleInstall}
+      />
       
       {/* Upper header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-rose-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 flex-shrink-0 shadow-sm">
