@@ -555,6 +555,8 @@ export default function CustomerDashboard() {
     }
   };
 
+  const style = themeStyles[theme] || themeStyles.classic;
+
   const getCustomerCalculatedTotal = () => {
     if (!activeOrder) return { subtotal: 0, discount: 0, taxableAmount: 0, gstAmount: 0, serviceChargeAmount: 0, grandTotal: 0 };
     const subtotal = activeOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || activeOrder.total || 0;
