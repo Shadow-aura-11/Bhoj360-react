@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { DollarSign, FileText, ShoppingBag, TrendingUp, Users, RefreshCw } from 'lucide-react';
+import { DollarSign, FileText, ShoppingBag, TrendingUp, Users, RefreshCw, Download } from 'lucide-react';
 import { createApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -298,6 +298,30 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        </div>
+        {/* App Download Center CTA */}
+        <div className="mt-6 bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-white">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+              <Download className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h4 className="font-display font-bold text-sm leading-tight">Staff Mobile Apps</h4>
+              <p className="text-indigo-300 text-[11px] mt-0.5">Generate & download Android APKs or iOS shortcuts for your staff</p>
+              <div className="flex gap-1.5 mt-2">
+                {[{ l: '🛡️ Admin', c: '#d97706' }, { l: '🍽️ Waiter', c: '#4f46e5' }, { l: '👨‍🍳 Kitchen', c: '#be123c' }, { l: '💳 Cashier', c: '#7c3aed' }].map(r => (
+                  <span key={r.l} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: r.c + '33', color: r.c, border: `1px solid ${r.c}44` }}>{r.l}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <Link
+            to={`/r/${restaurantId}/admin/app-downloads`}
+            className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white text-slate-900 text-xs font-bold rounded-xl hover:bg-slate-100 transition-all shadow-md"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download Apps
+          </Link>
         </div>
       </div>
     </DashboardShell>

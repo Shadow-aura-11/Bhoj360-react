@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Smartphone, Copy, Share2, Check, QrCode, X, Download,
   MessageSquare, Mail, ExternalLink, Info, ChevronDown, ChevronUp
@@ -179,6 +179,7 @@ function RoleCard({ role, restaurantName, restaurantId }) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const navigate = useNavigate();
 
   const fullUrl = `${window.location.origin}/r/${restaurantId}/login?role=${role.roleParam}`;
   const qrThumbUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=10&data=${encodeURIComponent(fullUrl)}`;
@@ -274,6 +275,16 @@ function RoleCard({ role, restaurantName, restaurantId }) {
             <ExternalLink className="w-3 h-3" />
             Open Install Page
           </a>
+
+          {/* Download App button */}
+          <button
+            onClick={() => navigate(`/r/${restaurantId}/admin/app-downloads`, { state: { role: role.role } })}
+            className="w-full py-2.5 px-4 flex items-center justify-center gap-2 text-white text-xs font-bold rounded-xl transition-all hover:opacity-90 shadow-sm"
+            style={{ backgroundColor: role.color }}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download Mobile App
+          </button>
         </div>
       </div>
 

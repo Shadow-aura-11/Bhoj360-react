@@ -17,6 +17,7 @@ import CouponsManager from './pages/admin/CouponsManager';
 import MoneyManager from './pages/admin/MoneyManager';
 import QRPrintPage from './components/QR/QRPrintPage';
 import StaffMobileApps from './pages/admin/StaffMobileApps';
+import AppDownloadCenter from './pages/admin/AppDownloadCenter';
 import WaiterDashboard from './pages/waiter/WaiterDashboard';
 import CounterDashboard from './pages/counter/CounterDashboard';
 import CustomerDashboard from './pages/customer/CustomerDashboard';
@@ -208,6 +209,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['admin']}>
             <StaffMobileApps />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/r/:restaurantId/admin/app-downloads"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AppDownloadCenter />
           </ProtectedRoute>
         }
       />
