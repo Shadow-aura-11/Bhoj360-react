@@ -177,7 +177,9 @@ export default function CounterDashboard() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewOrder = (order) => {
+    const handleNewOrder = (data) => {
+      const order = data?.order || data;
+      if (!order) return;
       playLoudSound();
       if (speechEnabled) {
         speakText(`Table ${order.table_number || order.table_id} ka naya order mila hai`);
@@ -239,13 +241,15 @@ export default function CounterDashboard() {
       refreshOrders();
     };
 
-    const handleItemAdded = (order) => {
+    const handleItemAdded = (data) => {
+      const order = data?.order || data;
+      if (!order) return;
       playLoudSound();
-      if (order && speechEnabled) {
+      if (speechEnabled) {
         speakText(`Table ${order.table_number || order.table_id} ke order me naye items add kiye gaye hain`);
       }
       refreshOrders();
-      if (printerSettings.enabled && order) {
+      if (printerSettings.enabled) {
         setPrintOrder(order);
       }
     };

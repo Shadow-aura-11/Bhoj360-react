@@ -43,6 +43,7 @@ export default function StaffSettings() {
     location: '',
     logo_url: '',
     fssai_compliance: '',
+    google_review_url: '',
     billing: {
       gst_enabled: true,
       gst_percentage: 5,
@@ -62,6 +63,7 @@ export default function StaffSettings() {
         show_logo: true,
         show_address: true,
         show_customer_info: true,
+        show_phone: true,
         custom_footer: 'Thank you for dining with us!'
       },
       kot_setting: {
@@ -119,6 +121,7 @@ export default function StaffSettings() {
           location: data.location || '',
           logo_url: data.logo_url || '',
           fssai_compliance: data.fssai_compliance || '',
+          google_review_url: data.google_review_url || '',
           billing: {
             gst_enabled: data.billing?.gst_enabled ?? true,
             gst_percentage: data.billing?.gst_percentage ?? 5,
@@ -138,6 +141,7 @@ export default function StaffSettings() {
               show_logo: data.printing?.bill_setting?.show_logo ?? true,
               show_address: data.printing?.bill_setting?.show_address ?? true,
               show_customer_info: data.printing?.bill_setting?.show_customer_info ?? true,
+              show_phone: data.printing?.bill_setting?.show_phone ?? true,
               custom_footer: data.printing?.bill_setting?.custom_footer ?? 'Thank you for dining with us!',
             },
             kot_setting: {
@@ -738,7 +742,7 @@ export default function StaffSettings() {
                       2. Bill Details Setup
                     </h4>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
                         <input 
                           type="checkbox"
@@ -756,6 +760,15 @@ export default function StaffSettings() {
                           className="rounded"
                         />
                         <span className="text-xs text-slate-700 font-semibold">Show Address</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={config.printing.bill_setting.show_phone}
+                          onChange={(e) => setConfig(prev => ({ ...prev, printing: { ...prev.printing, bill_setting: { ...prev.printing.bill_setting, show_phone: e.target.checked } } }))}
+                          className="rounded"
+                        />
+                        <span className="text-xs text-slate-700 font-semibold">Show Rest. Phone</span>
                       </label>
                       <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
                         <input 

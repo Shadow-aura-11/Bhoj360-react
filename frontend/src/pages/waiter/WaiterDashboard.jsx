@@ -25,6 +25,64 @@ const calculateTotalPayable = (order, discount, billingConfig) => {
   return taxableAmount + gstAmount + serviceChargeAmount;
 };
 
+const formatWhatsAppReceiptText = (order, discount, config, restaurantName) => {
+  if (!order) return '';
+  const billingConfig = config?.billing;
+  const subtotal = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || order.total || 0;
+  const discountAmt = order.discount_amount || discount || 0;
+  const taxableAmount = Math.max(0, subtotal - discountAmt);
+  const gstEnabled = billingConfig?.gst_enabled;
+  const gstPercent = billingConfig?.gst_percentage || 0;
+  const gstAmount = gstEnabled ? (taxableAmount * gstPercent) / 100 : 0;
+  const serviceChargeEnabled = billingConfig?.service_charge_enabled ?? true;
+  const serviceChargePercent = serviceChargeEnabled ? (billingConfig?.service_charge_percentage || 0) : 0;
+  const serviceChargeAmount = (taxableAmount * serviceChargePercent) / 100;
+  const finalTotal = taxableAmount + gstAmount + serviceChargeAmount;
+
+  const reviewLink = config?.google_review_url || 'https://google.com';
+
+  let text = `Dear Customer, your bill for Order #${order.id} at ${restaurantName} is ₹${finalTotal.toFixed(2)}. Thank you for dining with us! Kindly leave a Google review here: ${reviewLink}\n\n`;
+  
+  text += `--- DUPLICATE BILL ---\n`;
+  text += `${restaurantName.toUpperCase()}\n`;
+  if (config?.printing?.bill_setting?.show_address && config?.location) {
+    text += `${config.location}\n`;
+  }
+  if (config?.printing?.bill_setting?.show_phone && config?.contact_phone) {
+    text += `Phone: ${config.contact_phone}\n`;
+  }
+  if (config?.fssai_compliance) {
+    text += `FSSAI No: ${config.fssai_compliance}\n`;
+  }
+  text += `Table: ${order.table_number || 'Takeaway'}\n`;
+  text += `Order ID: #${order.id}\n`;
+  text += `Date: ${new Date(order.settled_at || order.created_at).toLocaleDateString()}\n`;
+  text += `----------------------\n`;
+  
+  order.items?.forEach((item) => {
+    const name = (item.is_addon ? '(Add-on) ' : '') + item.item_name;
+    text += `${name} x ${item.quantity} - ₹${(item.price * item.quantity).toFixed(2)}\n`;
+  });
+  
+  text += `----------------------\n`;
+  text += `Subtotal: ₹${subtotal.toFixed(2)}\n`;
+  if (discountAmt > 0) {
+    text += `Discount: -₹${discountAmt.toFixed(2)}\n`;
+  }
+  if (gstEnabled && gstAmount > 0) {
+    text += `GST (${gstPercent}%): ₹${gstAmount.toFixed(2)}\n`;
+  }
+  if (serviceChargeEnabled && serviceChargeAmount > 0) {
+    text += `Service Charge (${serviceChargePercent}%): ₹${serviceChargeAmount.toFixed(2)}\n`;
+  }
+  text += `----------------------\n`;
+  text += `Total Amount: ₹${finalTotal.toFixed(2)}\n`;
+  text += `----------------------\n`;
+  text += `${config?.printing?.bill_setting?.custom_footer || 'Thank you! Visit again.'}`;
+
+  return text;
+};
+
 export default function WaiterDashboard() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
@@ -238,11 +296,9 @@ export default function WaiterDashboard() {
     }
     const targetOrder = orderToSettle || orders.find(o => o.id === orderId);
     if (!targetOrder) return;
-    const finalTotal = targetOrder.total - discountAmount;
     try {
       await api.post(`/orders/${targetOrder.id}/send-whatsapp`, { phone: whatsappPhone });
-      const reviewLink = targetOrder.google_review_url || 'https://google.com';
-      const msg = `Dear Customer, your bill for Order #${targetOrder.id} at ${restaurantName} is ₹${finalTotal}. Thank you for dining with us! Kindly leave a Google review here: ${reviewLink}`;
+      const msg = formatWhatsAppReceiptText(targetOrder, discountAmount, restaurantConfig, restaurantName);
       window.open(`https://wa.me/91${whatsappPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       toast.success('WhatsApp bill link opened and sent!');
     } catch (e) {
@@ -435,9 +491,11 @@ export default function WaiterDashboard() {
       refreshTables();
     };
 
-    const handleNewOrder = (order) => {
+    const handleNewOrder = (data) => {
+      const order = data?.order || data;
+      if (!order) return;
       playLoudSound();
-      if (order && speechEnabled) {
+      if (speechEnabled) {
         speakText(`Table ${order.table_number || order.table_id} ka naya order mila hai`);
       }
       refreshOrders();
@@ -1560,6 +1618,10 @@ export default function WaiterDashboard() {
           
           {restaurantConfig?.printing?.bill_setting?.show_address && restaurantConfig?.location && (
             <div className="text-center text-[8px] text-slate-800 leading-normal mb-1">{restaurantConfig.location}</div>
+          )}
+          
+          {restaurantConfig?.printing?.bill_setting?.show_phone && restaurantConfig?.contact_phone && (
+            <div className="text-center text-[8.5px] text-slate-800 mb-1">Phone: {restaurantConfig.contact_phone}</div>
           )}
           
           {restaurantConfig?.fssai_compliance && (
