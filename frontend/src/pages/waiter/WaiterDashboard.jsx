@@ -344,16 +344,30 @@ export default function WaiterDashboard() {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'hi-IN';
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
       
       const voices = window.speechSynthesis.getVoices();
-      const hindiVoice = voices.find(v => v.lang === 'hi-IN' || v.lang.startsWith('hi'));
-      if (hindiVoice) {
-        utterance.voice = hindiVoice;
+      // Look for en-IN first because Romanized Hindi is read best by en-IN (Indian English accent)
+      let selectedVoice = voices.find(v => v.lang.toLowerCase() === 'en-in' || v.lang.toLowerCase().startsWith('en-in'));
+      
+      // If no en-IN, look for hi-IN
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.toLowerCase() === 'hi-in' || v.lang.toLowerCase().startsWith('hi-in'));
       }
       
+      // If still none, look for any English voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.toLowerCase().startsWith('en'));
+      }
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
+      } else {
+        utterance.lang = 'en-IN';
+      }
+      
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -369,7 +383,7 @@ export default function WaiterDashboard() {
       if (!tblNum) return;
       playLoudSound();
       if (speechEnabled) {
-        speakText(`टेबल ${tblNum} पर वेटर को बुलाया गया है`);
+        speakText(`Table ${tblNum} par waiter ko bulaya gaya hai`);
       }
       setWaiterCalls((prev) => ({ ...prev, [tblNum]: true }));
       setNotifications((prev) => [
@@ -398,13 +412,13 @@ export default function WaiterDashboard() {
       const existingOrder = ordersRef.current.find((o) => o.id === order.id);
       if (existingOrder && existingOrder.status !== order.status) {
         let statusHindi = '';
-        if (order.status === 'ready') statusHindi = 'तैयार है';
-        else if (order.status === 'preparing') statusHindi = 'तैयार हो रहा है';
-        else if (order.status === 'served') statusHindi = 'परोसा जा चुका है';
-        else if (order.status === 'paid') statusHindi = 'का भुगतान हो गया है';
+        if (order.status === 'ready') statusHindi = 'taiyar hai';
+        else if (order.status === 'preparing') statusHindi = 'taiyar ho raha hai';
+        else if (order.status === 'served') statusHindi = 'serve ho chuka hai';
+        else if (order.status === 'paid') statusHindi = 'ka bill pay ho gaya hai';
         else statusHindi = order.status;
 
-        const msg = `टेबल ${order.table_number || order.table_id} का ऑर्डर ${statusHindi}`;
+        const msg = `Table ${order.table_number || order.table_id} ka order ${statusHindi}`;
         playLoudSound();
         if (speechEnabled) {
           speakText(msg);
@@ -424,7 +438,7 @@ export default function WaiterDashboard() {
     const handleNewOrder = (order) => {
       playLoudSound();
       if (order && speechEnabled) {
-        speakText(`टेबल ${order.table_number || order.table_id} का नया ऑर्डर प्राप्त हुआ है`);
+        speakText(`Table ${order.table_number || order.table_id} ka naya order mila hai`);
       }
       refreshOrders();
       refreshTables();
