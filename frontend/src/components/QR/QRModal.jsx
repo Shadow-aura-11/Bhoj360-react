@@ -15,7 +15,8 @@ export default function QRModal({ isOpen, onClose, table, restaurantId }) {
     if (!table) return;
     try {
       setLoading(true);
-      const { data } = await api.get(`/tables/${table.id}/qr`);
+      const origin = window.location.origin + window.location.pathname.split('/r/')[0];
+      const { data } = await api.get(`/tables/${table.id}/qr`, { params: { origin } });
       setQrCode(data.qr); // base64 string
       setQrUrl(data.url); // url string
     } catch (err) {

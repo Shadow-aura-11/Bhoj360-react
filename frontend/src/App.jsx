@@ -269,11 +269,7 @@ export default function App() {
       {/* Customer Dashboard Seating Guard Route */}
       <Route
         path="/r/:restaurantId/customer"
-        element={
-          <ProtectedRoute allowedRoles={['customer']}>
-            <CustomerDashboard />
-          </ProtectedRoute>
-        }
+        element={<CustomerDashboard />}
       />
 
       {/* Self-Ordering Public Landing QR Page */}

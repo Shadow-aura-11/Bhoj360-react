@@ -23,9 +23,10 @@ export default function QRPrintPage() {
         setTables(data);
         
         // Fetch all QR codes in parallel
+        const origin = window.location.origin + window.location.pathname.split('/r/')[0];
         const qrPromises = data.map(async (table) => {
           try {
-            const qrRes = await api.get(`/tables/${table.id}/qr`);
+            const qrRes = await api.get(`/tables/${table.id}/qr`, { params: { origin } });
             return { id: table.id, qr: qrRes.data.qr, url: qrRes.data.url };
           } catch {
             return { id: table.id, qr: '', url: '' };

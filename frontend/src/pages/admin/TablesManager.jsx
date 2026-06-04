@@ -81,9 +81,10 @@ export default function TablesManager() {
       setZipping(true);
       const zip = new JSZip();
       
+      const origin = window.location.origin + window.location.pathname.split('/r/')[0];
       const qrPromises = tables.map(async (table) => {
         try {
-          const { data } = await api.get(`/tables/${table.id}/qr`);
+          const { data } = await api.get(`/tables/${table.id}/qr`, { params: { origin } });
           const base64Data = data.qr.replace(/^data:image\/png;base64,/, "");
           zip.file(`table-${table.number}-qr.png`, base64Data, { base64: true });
         } catch (err) {

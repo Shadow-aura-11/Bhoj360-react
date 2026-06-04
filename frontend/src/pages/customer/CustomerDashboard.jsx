@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Coffee, Clipboard, Compass, ArrowRight, Bell, Soup, Utensils, Award, History, Clock, X, RefreshCw, CreditCard, DollarSign, LogOut } from 'lucide-react';
 import { createApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
@@ -10,15 +10,20 @@ import toast from 'react-hot-toast';
 export default function CustomerDashboard() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const api = createApi(restaurantId);
   const { socket, isConnected } = useSocket(restaurantId);
 
   const [session, setSession] = useState(null); // { role, restaurantId, tableNumber, tableId, customerPhone, qrToken }
   
+  const urlTable = searchParams.get('table');
+  const urlToken = searchParams.get('token');
+
   // Login form states
   const [loginStep, setLoginStep] = useState(1); // 1: phone, 2: table
   const [customerPhone, setCustomerPhone] = useState('');
-  const [tableNumber, setTableNumber] = useState('');
+  const [tableNumber, setTableNumber] = useState(urlTable || '');
+  const [customerName, setCustomerName] = useState('');
   
   const [activeTab, setActiveTab] = useState('menu'); // 'menu' | 'order' | 'track'
   
@@ -274,6 +279,7 @@ export default function CustomerDashboard() {
         tableNumber: tableExists.number.toUpperCase(),
         tableId: tableExists.id,
         customerPhone: customerPhone.trim(),
+        customerName: customerName.trim(),
         qrToken: tableExists.qr_token,
       };
 
@@ -283,6 +289,43 @@ export default function CustomerDashboard() {
     } catch (err) {
       console.error(err);
       toast.error('Connection failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUrlLoginSubmit = async (e) => {
+    e.preventDefault();
+    const cleanPhone = customerPhone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data } = await api.get('/menu/public', {
+        params: { table: urlTable, token: urlToken },
+      });
+      
+      const tableId = data.table ? data.table.id : null;
+
+      const newSession = {
+        role: 'customer',
+        restaurantId,
+        tableNumber: urlTable,
+        tableId,
+        customerPhone: cleanPhone,
+        customerName: customerName.trim(),
+        qrToken: urlToken,
+      };
+
+      sessionStorage.setItem('session', JSON.stringify(newSession));
+      setSession(newSession);
+      toast.success(`Welcome to Table ${urlTable}`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Invalid QR Code or seating session expired.');
     } finally {
       setLoading(false);
     }
@@ -344,77 +387,117 @@ export default function CustomerDashboard() {
   );
 
   if (!session) {
-    /* 2-Step Entry Screen */
+    /* Seating Entry Screen */
     return (
       <div className="min-h-screen bg-[#f0fdf4] text-slate-800 flex items-center justify-center p-6 relative font-body">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100 rounded-full mix-blend-multiply filter blur-2xl opacity-40 translate-x-20 -translate-y-10" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-green-100 rounded-full mix-blend-multiply filter blur-2xl opacity-40 -translate-x-20 translate-y-10" />
 
-        <div className="relative w-full max-w-sm bg-white border border-slate-100 p-8 rounded-3xl shadow-xl text-center animate-slide-up">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-            <Utensils className="w-7 h-7" />
+        {urlTable && urlToken ? (
+          /* Auto-filled Seating via QR */
+          <div className="relative w-full max-w-sm bg-white border border-slate-100 p-8 rounded-3xl shadow-xl text-center animate-slide-up">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+              <Utensils className="w-7 h-7" />
+            </div>
+            
+            <h2 className="text-2xl font-black font-display text-emerald-950 leading-tight">Welcome Guest</h2>
+            <p className="text-xs text-slate-500 mt-1 mb-6">Table {urlTable}. Please enter your name and phone number to start dining.</p>
+
+            <form onSubmit={handleUrlLoginSubmit} className="space-y-4">
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Your Name (Optional)"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-base text-emerald-950 placeholder:text-slate-350"
+              />
+              <input
+                type="tel"
+                required
+                pattern="[0-9]{10}"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Phone Number (e.g. 9876543210)"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-emerald-950 placeholder:text-slate-300"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 transition-all font-semibold rounded-2xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 hover:-translate-y-0.5"
+              >
+                <span>{loading ? 'Entering...' : 'Proceed to Dining'}</span>
+                <ArrowRight className="w-4.5 h-4.5" />
+              </button>
+            </form>
           </div>
-          
-          {loginStep === 1 ? (
-            <>
-              <h2 className="text-2xl font-black font-display text-emerald-950 leading-tight">Welcome Guest</h2>
-              <p className="text-xs text-slate-500 mt-1 mb-6">Please enter your 10-digit phone number to start dining</p>
+        ) : (
+          /* Manual 2-Step Login Seating */
+          <div className="relative w-full max-w-sm bg-white border border-slate-100 p-8 rounded-3xl shadow-xl text-center animate-slide-up">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+              <Utensils className="w-7 h-7" />
+            </div>
+            
+            {loginStep === 1 ? (
+              <>
+                <h2 className="text-2xl font-black font-display text-emerald-950 leading-tight">Welcome Guest</h2>
+                <p className="text-xs text-slate-500 mt-1 mb-6">Please enter your 10-digit phone number to start dining</p>
 
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <input
-                  type="tel"
-                  required
-                  pattern="[0-9]{10}"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="e.g. 9876543210"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-emerald-950 placeholder:lowercase"
-                />
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 transition-all font-semibold rounded-2xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 hover:-translate-y-0.5"
-                >
-                  <span>Continue</span>
-                  <ArrowRight className="w-4.5 h-4.5" />
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-black font-display text-emerald-950 leading-tight">Table Selection</h2>
-              <p className="text-xs text-slate-500 mt-1 mb-6">Please enter the Table number printed on your stand card</p>
-
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <input
-                  type="text"
-                  required
-                  value={tableNumber}
-                  onChange={(e) => setTableNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. T1, O2"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-emerald-950 placeholder:lowercase"
-                />
-                
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setLoginStep(1)}
-                    className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-semibold transition-all text-xs"
-                  >
-                    Back
-                  </button>
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <input
+                    type="tel"
+                    required
+                    pattern="[0-9]{10}"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="e.g. 9876543210"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-emerald-950 placeholder:lowercase"
+                  />
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-2/3 py-3 bg-emerald-600 hover:bg-emerald-500 transition-all font-semibold rounded-2xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 hover:-translate-y-0.5"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 transition-all font-semibold rounded-2xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 hover:-translate-y-0.5"
                   >
-                    <span>Enter Dining</span>
+                    <span>Continue</span>
                     <ArrowRight className="w-4.5 h-4.5" />
                   </button>
-                </div>
-              </form>
-            </>
-          )}
-        </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-black font-display text-emerald-950 leading-tight">Table Selection</h2>
+                <p className="text-xs text-slate-500 mt-1 mb-6">Please enter the Table number printed on your stand card</p>
+
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <input
+                    type="text"
+                    required
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value.toUpperCase())}
+                    placeholder="e.g. T1, O2"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:outline-none rounded-2xl text-center font-bold text-lg font-mono text-emerald-950 placeholder:lowercase"
+                  />
+                  
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLoginStep(1)}
+                      className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-655 rounded-2xl font-semibold transition-all text-xs"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-2/3 py-3 bg-emerald-600 hover:bg-emerald-500 transition-all font-semibold rounded-2xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 hover:-translate-y-0.5"
+                    >
+                      <span>Enter Dining</span>
+                      <ArrowRight className="w-4.5 h-4.5" />
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        )}
       </div>
     );
   }

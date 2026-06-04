@@ -744,7 +744,8 @@ app.get('/tables/:id/qr', async (req, res) => {
   const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
 
-  const url = `http://localhost:${GATEWAY_PORT}/r/${RESTAURANT_ID}/menu?table=${table.number}&token=${table.qr_token}`;
+  const origin = req.query.origin || `http://localhost:${GATEWAY_PORT}`;
+  const url = `${origin.replace(/\/$/, '')}/r/${RESTAURANT_ID}/customer?table=${table.number}&token=${table.qr_token}`;
 
   try {
     const qrDataUrl = await QRCode.toDataURL(url, {
