@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock, VolumeX } from 'lucide-react';
+import { LogOut, ChefHat, Play, Check, Flame, ClipboardList, CheckSquare, Bell, Volume2, Clock, VolumeX, Smartphone } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -9,6 +9,7 @@ import TableStatusBar from '../../components/Tables/TableStatusBar';
 import OrderCard from '../../components/Orders/OrderCard';
 import toast from 'react-hot-toast';
 import { parseOrderDate } from '../../utils/date';
+import { usePWA } from '../../hooks/usePWA';
 
 export default function CounterDashboard() {
   const { restaurantId } = useParams();
@@ -109,6 +110,40 @@ export default function CounterDashboard() {
   const [mobileTab, setMobileTab] = useState('pending'); // 'pending' | 'preparing' | 'ready'
   const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
   const [printOrder, setPrintOrder] = useState(null);
+
+  const { installPrompt, handleInstall } = usePWA(restaurantName, 'Kitchen Portal', agencySettings.logo_url);
+
+  useEffect(() => {
+    if (installPrompt) {
+      toast((t) => (
+        <div className="flex items-center justify-between gap-3 text-slate-800 w-full">
+          <div className="flex flex-col gap-0.5 text-left">
+            <span className="font-bold text-xs text-rose-600" style={{ color: '#be123c' }}>Install Kitchen App</span>
+            <span className="text-[10px] text-slate-500">Install for real-time order alerts & display</span>
+          </div>
+          <button
+            onClick={() => {
+              handleInstall();
+              toast.dismiss(t.id);
+            }}
+            className="px-3 py-1.5 text-white rounded-lg text-xs font-bold shrink-0 transition-all shadow-sm"
+            style={{ backgroundColor: '#be123c' }}
+          >
+            Install
+          </button>
+        </div>
+      ), {
+        id: 'pwa-kitchen-install-toast',
+        duration: 15000,
+        style: {
+          border: '2px solid #be123c',
+          borderRadius: '1.25rem',
+          padding: '14px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+        }
+      });
+    }
+  }, [installPrompt]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -281,7 +316,7 @@ export default function CounterDashboard() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('session');
-    navigate(`/r/${restaurantId}/login`);
+    navigate(`/r/${restaurantId}/login?role=counter`);
   };
 
   // Filter orders into columns
@@ -309,6 +344,23 @@ export default function CounterDashboard() {
 
   return (
     <div className="min-h-screen bg-rose-50/20 text-slate-800 flex flex-col font-body">
+      {/* PWA Install Banner */}
+      {installPrompt && (
+        <div className="bg-rose-650 text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-inner no-print flex-shrink-0" style={{ backgroundColor: '#be123c' }}>
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            <span>Install the <strong>{restaurantName} Kitchen App</strong> on your device for quick access!</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleInstall}
+              className="bg-white text-rose-700 px-3.5 py-1 rounded-lg hover:bg-slate-100 transition-all font-bold shadow-sm"
+            >
+              Install App
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Upper header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-rose-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 flex-shrink-0 shadow-sm">

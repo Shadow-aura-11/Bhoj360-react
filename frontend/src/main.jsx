@@ -14,6 +14,14 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Global PWA installation event listener to prevent event loss during React mount cycles
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredPrompt = e;
+  // Dispatch a custom event to notify components that the prompt is ready
+  window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

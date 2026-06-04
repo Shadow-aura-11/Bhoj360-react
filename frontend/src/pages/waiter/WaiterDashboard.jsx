@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw, VolumeX } from 'lucide-react';
+import { LogOut, Bell, Check, UtensilsCrossed, Calendar, Users, Coffee, Soup, Plus, AlertCircle, Volume2, X, Printer, Send, Gift, RefreshCw, VolumeX, Smartphone } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -12,6 +12,7 @@ import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
 import { format, differenceInMinutes, parseISO } from 'date-fns';
 import { parseOrderDate } from '../../utils/date';
+import { usePWA } from '../../hooks/usePWA';
 
 const calculateTotalPayable = (order, discount, billingConfig) => {
   if (!order) return 0;
@@ -136,6 +137,40 @@ export default function WaiterDashboard() {
   const [printerSettings, setPrinterSettings] = useState({ enabled: false, size: '80mm' });
   const [restaurantConfig, setRestaurantConfig] = useState(null);
   const [printOrder, setPrintOrder] = useState(null);
+
+  const { installPrompt, handleInstall } = usePWA(restaurantName, 'Waiter Portal', restaurantConfig?.logo_url);
+
+  useEffect(() => {
+    if (installPrompt) {
+      toast((t) => (
+        <div className="flex items-center justify-between gap-3 text-slate-800 w-full">
+          <div className="flex flex-col gap-0.5 text-left">
+            <span className="font-bold text-xs text-indigo-655 text-indigo-600">Install Waiter App</span>
+            <span className="text-[10px] text-slate-505">Install for quick orders and table tracking</span>
+          </div>
+          <button
+            onClick={() => {
+              handleInstall();
+              toast.dismiss(t.id);
+            }}
+            className="px-3 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all shadow-sm"
+            style={{ backgroundColor: '#4f46e5' }}
+          >
+            Install
+          </button>
+        </div>
+      ), {
+        id: 'pwa-waiter-install-toast',
+        duration: 15000,
+        style: {
+          border: '2px solid #6366f1',
+          borderRadius: '1.25rem',
+          padding: '14px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+        }
+      });
+    }
+  }, [installPrompt]);
 
   // Settlement and payment states
   const [settleModalOpen, setSettleModalOpen] = useState(false);
@@ -607,13 +642,31 @@ export default function WaiterDashboard() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('session');
-    navigate(`/r/${restaurantId}/login`);
+    navigate(`/r/${restaurantId}/login?role=waiter`);
   };
 
 
 
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col font-body">
+      {/* PWA Install Banner */}
+      {installPrompt && (
+        <div className="bg-indigo-600 text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-inner no-print flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            <span>Install the <strong>{restaurantName} Waiter App</strong> on your device for quick access!</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleInstall}
+              className="bg-white text-indigo-700 px-3.5 py-1 rounded-lg hover:bg-slate-100 transition-all font-bold shadow-sm"
+            >
+              Install App
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-amber-200/60 bg-white/80 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">

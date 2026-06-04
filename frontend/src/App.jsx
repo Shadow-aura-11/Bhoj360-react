@@ -16,11 +16,13 @@ import CustomerDirectory from './pages/admin/CustomerDirectory';
 import CouponsManager from './pages/admin/CouponsManager';
 import MoneyManager from './pages/admin/MoneyManager';
 import QRPrintPage from './components/QR/QRPrintPage';
+import StaffMobileApps from './pages/admin/StaffMobileApps';
 import WaiterDashboard from './pages/waiter/WaiterDashboard';
 import CounterDashboard from './pages/counter/CounterDashboard';
 import CustomerDashboard from './pages/customer/CustomerDashboard';
 import SelfOrder from './pages/customer/SelfOrder';
 import CashierDashboard from './pages/cashier/CashierDashboard';
+import PWAInstallLanding from './components/PWAInstallLanding';
 
 // Marketing Subpages
 import AboutPage from './pages/marketing/AboutPage';
@@ -47,10 +49,16 @@ function AgencyProtectedRoute({ children }) {
 // Route Guard for staff / admin roles
 function ProtectedRoute({ allowedRoles, children }) {
   const { restaurantId } = useParams();
+  const location = useLocation();
   const sessionStr = sessionStorage.getItem('session');
   
   if (!sessionStr) {
-    return <Navigate to={`/r/${restaurantId}/login`} replace />;
+    let roleParam = 'waiter';
+    if (location.pathname.endsWith('/waiter')) roleParam = 'waiter';
+    else if (location.pathname.endsWith('/counter')) roleParam = 'counter';
+    else if (location.pathname.endsWith('/cashier')) roleParam = 'cashier';
+    else if (location.pathname.includes('/admin')) roleParam = 'admin';
+    return <Navigate to={`/r/${restaurantId}/login?role=${roleParam}&redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
   try {
@@ -192,6 +200,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['admin']}>
             <QRPrintPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/r/:restaurantId/admin/staff-apps"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <StaffMobileApps />
           </ProtectedRoute>
         }
       />

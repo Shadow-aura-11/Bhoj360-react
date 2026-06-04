@@ -12,7 +12,8 @@ import {
   X,
   Users,
   Ticket,
-  Wallet
+  Wallet,
+  Smartphone
 } from 'lucide-react';
 
 export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
@@ -20,7 +21,7 @@ export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
 
   const handleLogout = () => {
     sessionStorage.removeItem('session');
-    navigate(`/r/${restaurantId}/login`);
+    navigate(`/r/${restaurantId}/login?role=${role || 'admin'}`);
     if (onClose) onClose();
   };
 
@@ -35,6 +36,7 @@ export default function Sidebar({ restaurantId, role, isOpen, onClose }) {
     { label: 'Money Management', path: `/r/${restaurantId}/admin/money`, icon: Wallet },
     { label: 'Analytics', path: `/r/${restaurantId}/admin/analytics`, icon: BarChart3 },
     { label: 'Print QR Codes', path: `/r/${restaurantId}/admin/print-qr`, icon: QrCode },
+    { label: 'Staff Mobile Apps', path: `/r/${restaurantId}/admin/staff-apps`, icon: Smartphone },
     { label: 'Settings', path: `/r/${restaurantId}/admin/settings`, icon: Settings },
   ];
 

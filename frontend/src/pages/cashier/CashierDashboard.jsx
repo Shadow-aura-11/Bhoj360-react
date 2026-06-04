@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Landmark, Users, ShoppingCart, CheckSquare, Printer, Check, DollarSign, History, Volume2, LogOut, Plus, X, Gift, Send, RefreshCw } from 'lucide-react';
+import { Landmark, Users, ShoppingCart, CheckSquare, Printer, Check, DollarSign, History, Volume2, LogOut, Plus, X, Gift, Send, RefreshCw, Smartphone } from 'lucide-react';
 import { createApi, agencyApi } from '../../api/client';
 import { useSocket } from '../../hooks/useSocket';
 import { useTables } from '../../hooks/useTables';
@@ -8,6 +8,7 @@ import { useOrders } from '../../hooks/useOrders';
 import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
 import { parseOrderDate } from '../../utils/date';
+import { usePWA } from '../../hooks/usePWA';
 
 const calculateTotalPayable = (order, discount, billingConfig) => {
   if (!order) return 0;
@@ -149,6 +150,40 @@ export default function CashierDashboard() {
 
   const session = JSON.parse(sessionStorage.getItem('session') || '{}');
   const restaurantName = session.name || 'Restaurant';
+
+  const { installPrompt, handleInstall } = usePWA(restaurantName, 'Cashier Portal', config?.logo_url);
+
+  useEffect(() => {
+    if (installPrompt) {
+      toast((t) => (
+        <div className="flex items-center justify-between gap-3 text-slate-800 w-full">
+          <div className="flex flex-col gap-0.5 text-left">
+            <span className="font-bold text-xs text-indigo-600">Install Cashier App</span>
+            <span className="text-[10px] text-slate-500">Install for persistent POS settlement sessions</span>
+          </div>
+          <button
+            onClick={() => {
+              handleInstall();
+              toast.dismiss(t.id);
+            }}
+            className="px-3 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all shadow-sm"
+            style={{ backgroundColor: '#4f46e5' }}
+          >
+            Install
+          </button>
+        </div>
+      ), {
+        id: 'pwa-cashier-install-toast',
+        duration: 15000,
+        style: {
+          border: '2px solid #6366f1',
+          borderRadius: '1.25rem',
+          padding: '14px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+        }
+      });
+    }
+  }, [installPrompt]);
 
   const { tables, refreshTables } = useTables(restaurantId, socket);
   const { orders, refreshOrders } = useOrders(restaurantId, socket);
@@ -472,13 +507,30 @@ export default function CashierDashboard() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('session');
-    navigate(`/r/${restaurantId}/login`);
+    navigate(`/r/${restaurantId}/login?role=cashier`);
   };
 
   const salesHistory = orders.filter(o => o.status === 'paid');
   const totalSalesToday = salesHistory.reduce((sum, o) => sum + o.total, 0);
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-body relative">
+      {/* PWA Install Banner */}
+      {installPrompt && (
+        <div className="bg-blue-600 text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-inner no-print flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            <span>Install the <strong>{restaurantName} Cashier App</strong> on your device for quick access!</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleInstall}
+              className="bg-white text-blue-700 px-3.5 py-1 rounded-lg hover:bg-slate-100 transition-all font-bold shadow-sm"
+            >
+              Install App
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* SCOPED CSS PRINT LAYOUT */}
       <style>{`
