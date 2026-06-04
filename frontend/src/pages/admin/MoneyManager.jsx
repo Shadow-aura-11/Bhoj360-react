@@ -18,6 +18,7 @@ import {
 import { createApi } from '../../api/client';
 import DashboardShell from '../../components/Layout/DashboardShell';
 import toast from 'react-hot-toast';
+import { parseOrderDate } from '../../utils/date';
 
 export default function MoneyManager() {
   const { restaurantId } = useParams();
@@ -121,11 +122,11 @@ export default function MoneyManager() {
   };
 
   const formatSettledDate = (value) => (
-    value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
+    value ? parseOrderDate(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
   );
 
   const formatSettledTime = (value) => (
-    value ? new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'
+    value ? parseOrderDate(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'
   );
 
   const displayPaymentMethod = (method) => {

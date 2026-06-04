@@ -4,6 +4,7 @@ import { BarChart3, TrendingUp, DollarSign, ShoppingBag, Eye, RefreshCw, Layers 
 import { createApi } from '../../api/client';
 import DashboardShell from '../../components/Layout/DashboardShell';
 import toast from 'react-hot-toast';
+import { parseOrderDate } from '../../utils/date';
 import {
   AreaChart,
   Area,
@@ -87,7 +88,7 @@ export default function Analytics() {
       });
       orders.forEach((o) => {
         if (o.created_at) {
-          const hour = new Date(o.created_at).getHours();
+          const hour = parseOrderDate(o.created_at).getHours();
           const slot = hourlyCounts.find((hc) => hc.hour.startsWith(`${hour}:`));
           if (slot) slot.ordersCount++;
         }

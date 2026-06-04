@@ -1,7 +1,8 @@
 import React from 'react';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { Play, Check, ChevronRight, CheckSquare, DollarSign, Clock, Printer } from 'lucide-react';
 import StatusBadge from '../shared/StatusBadge';
+import { parseOrderDate } from '../../utils/date';
 
 export default function OrderCard({
   order,
@@ -11,12 +12,12 @@ export default function OrderCard({
   compact = false,
   variant = 'waiter',
 }) {
-  const timeElapsed = formatDistanceToNow(parseISO(order.created_at || new Date().toISOString()));
+  const timeElapsed = formatDistanceToNow(parseOrderDate(order.created_at));
   
   // Calculate if pending/preparing for more than 15 minutes
   const isDelayed = () => {
     if (order.status !== 'pending' && order.status !== 'preparing') return false;
-    const minutes = Math.floor((new Date() - parseISO(order.created_at)) / 60000);
+    const minutes = Math.floor((new Date() - parseOrderDate(order.created_at)) / 60000);
     return minutes > 15;
   };
 

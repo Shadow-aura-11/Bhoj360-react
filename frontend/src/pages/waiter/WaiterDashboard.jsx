@@ -11,6 +11,7 @@ import StatusBadge from '../../components/shared/StatusBadge';
 import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
 import { format, differenceInMinutes, parseISO } from 'date-fns';
+import { parseOrderDate } from '../../utils/date';
 
 const calculateTotalPayable = (order, discount, billingConfig) => {
   if (!order) return 0;
@@ -56,7 +57,7 @@ const formatWhatsAppReceiptText = (order, discount, config, restaurantName) => {
   }
   text += `Table: ${order.table_number || 'Takeaway'}\n`;
   text += `Order ID: #${order.id}\n`;
-  text += `Date: ${new Date(order.settled_at || order.created_at).toLocaleDateString()}\n`;
+  text += `Date: ${parseOrderDate(order.settled_at || order.created_at).toLocaleDateString()}\n`;
   text += `----------------------\n`;
   
   order.items?.forEach((item) => {
@@ -1637,8 +1638,8 @@ export default function WaiterDashboard() {
               <span>Order: #{receiptOrder.id}</span>
             </div>
             <div className="flex justify-between">
-              <span>Settled Date: {new Date(receiptOrder.settled_at || receiptOrder.created_at).toLocaleDateString()}</span>
-              <span>Settled Time: {new Date(receiptOrder.settled_at || receiptOrder.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              <span>Settled Date: {parseOrderDate(receiptOrder.settled_at || receiptOrder.created_at).toLocaleDateString()}</span>
+              <span>Settled Time: {parseOrderDate(receiptOrder.settled_at || receiptOrder.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
             {restaurantConfig?.printing?.bill_setting?.show_customer_info && receiptOrder.customer_phone && (
               <div className="text-left font-bold">Cust. Phone: {receiptOrder.customer_phone}</div>
@@ -1772,7 +1773,7 @@ export default function WaiterDashboard() {
                     </div>
                   )}
                   <div className="text-[10px] text-slate-600">
-                    TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+                    TIME: {parseOrderDate(printOrder.created_at).toLocaleString('en-IN')}
                   </div>
                 </div>
               ) : (
@@ -1788,7 +1789,7 @@ export default function WaiterDashboard() {
                     <div>GUEST: {printOrder.customer_name}</div>
                   )}
                   <div className="text-[9px] text-slate-500 font-mono">
-                    TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+                    TIME: {parseOrderDate(printOrder.created_at).toLocaleString('en-IN')}
                   </div>
                 </div>
               )}

@@ -7,6 +7,7 @@ import { useTables } from '../../hooks/useTables';
 import { useOrders } from '../../hooks/useOrders';
 import NewOrderModal from '../../components/Orders/NewOrderModal';
 import toast from 'react-hot-toast';
+import { parseOrderDate } from '../../utils/date';
 
 const calculateTotalPayable = (order, discount, billingConfig) => {
   if (!order) return 0;
@@ -52,7 +53,7 @@ const formatWhatsAppReceiptText = (order, discount, config, restaurantName) => {
   }
   text += `Table: ${order.table_number || 'Takeaway'}\n`;
   text += `Order ID: #${order.id}\n`;
-  text += `Date: ${new Date(order.settled_at || order.created_at).toLocaleDateString()}\n`;
+  text += `Date: ${parseOrderDate(order.settled_at || order.created_at).toLocaleDateString()}\n`;
   text += `----------------------\n`;
   
   order.items?.forEach((item) => {
@@ -546,8 +547,8 @@ export default function CashierDashboard() {
               <span>Order: #{receiptOrder.id}</span>
             </div>
             <div className="flex justify-between">
-              <span>Settled Date: {new Date(receiptOrder.settled_at || receiptOrder.created_at).toLocaleDateString()}</span>
-              <span>Settled Time: {new Date(receiptOrder.settled_at || receiptOrder.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              <span>Settled Date: {parseOrderDate(receiptOrder.settled_at || receiptOrder.created_at).toLocaleDateString()}</span>
+              <span>Settled Time: {parseOrderDate(receiptOrder.settled_at || receiptOrder.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
             {config?.printing?.bill_setting?.show_customer_info && receiptOrder.customer_phone && (
               <div className="text-left font-bold">Cust. Phone: {receiptOrder.customer_phone}</div>
@@ -921,7 +922,7 @@ export default function CashierDashboard() {
                           <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-550 px-1.5 py-0.2 rounded font-mono">ORDER #{historyOrder.id}</span>
                         </div>
                         <span className="text-[10px] text-slate-500 mt-0.5 block">
-                          Settled via {historyOrder.payment_method?.toUpperCase()} on {new Date(historyOrder.settled_at || historyOrder.updated_at).toLocaleDateString()} at {new Date(historyOrder.settled_at || historyOrder.updated_at).toLocaleTimeString()}
+                          Settled via {historyOrder.payment_method?.toUpperCase()} on {parseOrderDate(historyOrder.settled_at || historyOrder.updated_at).toLocaleDateString()} at {parseOrderDate(historyOrder.settled_at || historyOrder.updated_at).toLocaleTimeString()}
                         </span>
                       </div>
 

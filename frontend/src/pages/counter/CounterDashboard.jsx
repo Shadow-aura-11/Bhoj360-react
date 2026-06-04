@@ -8,6 +8,7 @@ import { useOrders } from '../../hooks/useOrders';
 import TableStatusBar from '../../components/Tables/TableStatusBar';
 import OrderCard from '../../components/Orders/OrderCard';
 import toast from 'react-hot-toast';
+import { parseOrderDate } from '../../utils/date';
 
 export default function CounterDashboard() {
   const { restaurantId } = useParams();
@@ -298,8 +299,8 @@ export default function CounterDashboard() {
     if (closedOrders.length === 0) return '12m';
     let totalMins = 0;
     closedOrders.forEach((o) => {
-      const created = new Date(o.created_at);
-      const updated = new Date(o.updated_at);
+      const created = parseOrderDate(o.created_at);
+      const updated = parseOrderDate(o.updated_at);
       const mins = Math.floor((updated - created) / 60000);
       totalMins += mins > 0 ? mins : 10; // clamp minimum to 10 mins
     });
@@ -603,7 +604,7 @@ export default function CounterDashboard() {
               <div>GUEST: {printOrder.customer_name}</div>
             )}
             <div className="text-[9px] text-slate-500">
-              TIME: {new Date(printOrder.created_at || new Date()).toLocaleString('en-IN')}
+              TIME: {parseOrderDate(printOrder.created_at).toLocaleString('en-IN')}
             </div>
           </div>
 

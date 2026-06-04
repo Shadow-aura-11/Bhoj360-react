@@ -12,6 +12,7 @@ import TodayReservations from '../../components/Reservations/TodayReservations';
 import StatusBadge from '../../components/shared/StatusBadge';
 import toast from 'react-hot-toast';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { parseOrderDate } from '../../utils/date';
 import {
   AreaChart,
   Area,
@@ -70,12 +71,12 @@ export default function AdminDashboard() {
 
       // Filter paid orders for today
       const todayOrders = orders.filter((o) => {
-        const isTodayDate = o.created_at ? format(parseISO(o.created_at), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') : false;
+        const isTodayDate = o.created_at ? format(parseOrderDate(o.created_at), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') : false;
         return isTodayDate && o.status === 'paid';
       });
 
       todayOrders.forEach((o) => {
-        const orderHour = new Date(o.created_at).getHours();
+        const orderHour = parseOrderDate(o.created_at).getHours();
         const slot = hourlyCounts.find((hc) => hc.time.startsWith(`${orderHour}:`));
         if (slot) slot.amount += o.total;
       });
@@ -281,7 +282,7 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          {order.created_at ? formatDistanceToNow(parseISO(order.created_at)) : 'some time'} ago
+                          {order.created_at ? formatDistanceToNow(parseOrderDate(order.created_at)) : 'some time'} ago
                         </span>
                       </div>
 
